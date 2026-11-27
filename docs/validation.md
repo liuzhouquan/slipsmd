@@ -18,7 +18,7 @@
 
 改名版本本地已通过：20 项文件／链接、Chat 格式兼容与 profile 迁移测试，类型检查、生产构建、源码启动和打包后 Linux 应用两套桌面流程。桌面流程覆盖 slips.md 名称与 preload 桥、命令行打开文件、旧 Chat 的 CRLF 与归档兼容、笔记链接补全、右侧任务框保存、多窗口和图片。
 
-改名前版本曾通过 Windows 与 Ubuntu CI；改名后的打包和 CI 证据将在本次验证结束后更新。安装向导和真实输入法仍需人工体验。
+Windows 与 Ubuntu 已通过 [CI 45991725132](https://github.com/liuzhouquan/slips.md/actions/runs/45991725132)，验证代码提交为 `bbfcbc5420a752a2e53a192627ef0624090154c8`。两个平台均通过 20 项测试、构建、源码启动和打包后桌面流程；Windows 还构建了新名称的 NSIS 安装包和 zip。安装向导和真实输入法仍需人工体验。
 
 ## GitHub CI
 
