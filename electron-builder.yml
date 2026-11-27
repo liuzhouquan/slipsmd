@@ -1,0 +1,28 @@
+appId: io.inkisle.desktop
+productName: Inkisle
+artifactName: Inkisle-${version}-${arch}.${ext}
+directories:
+  output: dist
+files:
+  - out/**/*
+  - package.json
+  - build/icon.png
+  - LICENSE
+  - THIRD_PARTY_NOTICES.md
+asar: true
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+    - zip
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+linux:
+  icon: build/icon.png
+  target: tar.gz
+  category: Office
+fileAssociations:
+  - ext: md
+    name: Markdown document
+    role: Editor

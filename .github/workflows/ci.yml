@@ -1,0 +1,62 @@
+name: Build and verify
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: false
+  ELECTRON_BUILDER_COMPRESSION_LEVEL: 1
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node node_modules/electron/install.js
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+      - name: Desktop integration (Windows)
+        if: runner.os == 'Windows'
+        run: npm run test:desktop
+      - name: Desktop integration (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:desktop
+      - name: Package Windows installer and zip
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win --x64 --publish never
+      - name: Package Linux archive
+        if: runner.os == 'Linux'
+        run: npx electron-builder --linux --publish never
+      - name: Packaged desktop integration (Windows)
+        if: runner.os == 'Windows'
+        run: npm run test:desktop -- --packaged
+      - name: Packaged desktop integration (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:desktop -- --packaged
+      - uses: actions/upload-artifact@v7.0.2
+        if: success()
+        with:
+          name: Inkisle-${{ runner.os }}
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7.0.2
+        if: failure()
+        with:
+          name: diagnostics-${{ runner.os }}
+          path: .test-results/
