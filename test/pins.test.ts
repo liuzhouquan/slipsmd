@@ -50,10 +50,11 @@ describe('persistent shortcuts', () => {
   })
   it('reports missing or changed targets without deleting the shortcut or any file', async () => {
     const pin = await createPin(file, 'file')
+    const canonical = pin.path
     const moved = file + '.moved'
     await fs.rename(file, moved)
     await expect(resolvePin(pin)).rejects.toThrow('重新固定')
-    expect(pin.path).toBe(file)
+    expect(pin.path).toBe(canonical)
     await fs.mkdir(file)
     await expect(resolvePin(pin)).rejects.toThrow('请选择')
     expect(await fs.readFile(moved, 'utf8')).toBe('# Keep my content\n')

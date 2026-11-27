@@ -270,7 +270,8 @@ function registerHandlers() {
       if (result.canceled) return settings
       candidate = result.filePaths[0]
     }
-    settings.pins = addPin(settings.pins, await createPin(candidate, kind))
+    const pin = await createPin(candidate, kind)
+    settings.pins = addPin(settings.pins, pin)
     await persistSettings()
     broadcast({ type: 'settings', settings })
     return settings

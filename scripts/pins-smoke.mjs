@@ -15,6 +15,8 @@ await fs.mkdir(work)
 await fs.mkdir(other)
 await fs.mkdir(path.join(temp, 'assets'))
 await fs.writeFile(file, '# Current note\n\nReady to write.\n')
+const parallel = [path.join(work, 'Parallel A.md'), path.join(work, 'Parallel B.md')]
+for (const target of parallel) await fs.writeFile(target, '# Concurrent pin\n')
 await fs.writeFile(path.join(other, 'Shelf.md'), '# Other workspace\n')
 await fs.writeFile(loose, '# Loose note\n\n[Sibling](Sibling.md)\n\n![Local](assets/pixel.png)\n')
 await fs.writeFile(
@@ -81,6 +83,21 @@ try {
   assert.equal(await second.locator('.pin-open').count(), 2)
   assert.equal(await second.locator('.primary-document').count(), 0)
   assert.equal(await page.locator('.primary-document .document-name').innerText(), 'Home.md')
+
+  await Promise.all([
+    page.evaluate((f) => window.slipsmd.pinLocation('file', f), parallel[0]),
+    second.evaluate((f) => window.slipsmd.pinLocation('file', f), parallel[1]),
+  ])
+  await page.waitForFunction(() => document.querySelectorAll('.pin-open').length === 4)
+  await second.waitForFunction(() => document.querySelectorAll('.pin-open').length === 4)
+  const added = (await page.evaluate(() => window.slipsmd.bootstrap())).settings.pins.filter((p) =>
+    p.name.startsWith('Parallel '),
+  )
+  assert.equal(added.length, 2)
+  await Promise.all(added.map((pin) => page.evaluate((id) => window.slipsmd.removePin(id), pin.id)))
+  await page.waitForFunction(() => document.querySelectorAll('.pin-open').length === 2)
+  await second.waitForFunction(() => document.querySelectorAll('.pin-open').length === 2)
+  console.log('PASS: simultaneous pin additions from separate windows preserve both records')
 
   // Only the native picker is stubbed. The real main-process handlers still validate all targets.
   await application.evaluate(
