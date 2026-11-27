@@ -13,6 +13,19 @@ export async function importLegacyProfiles(destination: string, sources: string[
   }
   await fs.mkdir(destination, { recursive: true })
   for (const source of new Set(sources)) {
+    let entries: string[]
+    try {
+      entries = await fs.readdir(source)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      throw error
+    }
+    if (
+      !entries.some((name) =>
+        ['settings.json', 'drafts', 'pending-images', '.legacy-profile-imported'].includes(name),
+      )
+    )
+      continue
     for (const name of ['settings.json', 'drafts', 'pending-images']) {
       const original = path.join(source, name)
       const target = path.join(destination, name)
@@ -28,6 +41,8 @@ export async function importLegacyProfiles(destination: string, sources: string[
         if (!['ENOENT', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
       }
     }
+    // Sources are newest first. Older profiles may contain drafts already resolved there.
+    break
   }
   await fs.writeFile(marker, '1\n', { flag: 'wx' })
 }

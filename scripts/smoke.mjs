@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import http from 'node:http'
 const root = path.resolve('.')
 const packaged = process.argv.includes('--packaged')
-const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'slips-smoke-'))
+const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'slipsmd-smoke-'))
 const work = path.join(temp, 'notes')
 await fs.cp(path.join(root, 'examples/workspace'), work, { recursive: true })
 const file = path.join(work, 'Welcome.md')
@@ -15,14 +15,14 @@ const legacyText = '来自旧版的收集记录。'
 const original =
   '\uFEFF' +
   (
-    '---\ntitle: slips.md\n---\n\n' +
+    '---\ntitle: SlipsMD\n---\n\n' +
     (await fs.readFile(file, 'utf8')) +
-    `\n\n<!-- inkisle-from:${legacyId} -->\n${legacyText}\n`
+    `\n\n<!-- slips-from:${legacyId} -->\n${legacyText}\n`
   ).replace(/\n/g, '\r\n')
 await fs.writeFile(file, original)
 await fs.writeFile(
   path.join(work, 'Chat.md'),
-  `# Chat\r\n\r\n<!-- inkisle-capture:${legacyId} 2026-11-27T10:00:00Z -->\r\n${legacyText}\r\n\r\n` +
+  `# Chat\r\n\r\n<!-- slips-capture:${legacyId} 2026-11-27T10:00:00Z -->\r\n${legacyText}\r\n\r\n` +
     '<!-- inkisle-capture:already-archived 2026-11-27T09:00:00Z -->\r\n已经整理的记录。\r\n<!-- inkisle-archived:already-archived -->\r\n',
 )
 const errors = []
@@ -72,7 +72,7 @@ try {
       ? path.join(
           root,
           'dist',
-          process.platform === 'win32' ? 'win-unpacked/slips-md.exe' : 'linux-unpacked/slips-md',
+          process.platform === 'win32' ? 'win-unpacked/slipsmd.exe' : 'linux-unpacked/slipsmd',
         )
       : path.join(
           root,
@@ -82,18 +82,18 @@ try {
     args: ['--no-sandbox', ...(packaged ? [] : [root]), file],
     env: {
       ...launchEnv,
-      SLIPS_MD_USER_DATA: path.join(temp, 'profile'),
-      SLIPS_MD_WORKSPACE: work,
+      SLIPSMD_USER_DATA: path.join(temp, 'profile'),
+      SLIPSMD_WORKSPACE: work,
     },
     timeout: 60000,
   })
   const page = await application.firstWindow()
   page.on('pageerror', (error) => errors.push(error.message))
   await page.waitForSelector('.primary-document .cm-editor')
-  assert.equal(await application.evaluate(({ app }) => app.getName()), 'slips.md')
-  assert.ok((await page.title()).endsWith(' — slips.md'))
-  assert.equal(await page.evaluate(() => typeof window.slips.capture), 'function')
-  console.log('PASS: application name, document title and preload bridge use slips.md')
+  assert.equal(await application.evaluate(({ app }) => app.getName()), 'SlipsMD')
+  assert.ok((await page.title()).endsWith(' — SlipsMD'))
+  assert.equal(await page.evaluate(() => typeof window.slipsmd.capture), 'function')
+  console.log('PASS: application name, document title and preload bridge use SlipsMD')
   await page.waitForSelector('.md-table-preview table')
   await page.waitForSelector('.katex')
   assert.equal(await fs.readFile(file, 'utf8'), original, 'opening a file must not reformat it')
@@ -160,7 +160,7 @@ try {
   assert.equal((await fs.readFile(file, 'utf8')).split(legacyText).length - 1, 1)
   assert.ok(
     (await fs.readFile(path.join(work, 'Chat.md'), 'utf8')).includes(
-      `<!-- slips-archived:${legacyId} -->`,
+      `<!-- slipsmd-archived:${legacyId} -->`,
     ),
   )
   console.log(
@@ -186,7 +186,7 @@ try {
   assert.equal((await fs.readdir(path.join(work, 'assets'))).length, 1)
   console.log('PASS: clipboard image saves locally and inserts Markdown link')
   await page.evaluate(
-    (url) => window.slips.updateSettings({ imageMode: 'picgo', picgoUrl: url }),
+    (url) => window.slipsmd.updateSettings({ imageMode: 'picgo', picgoUrl: url }),
     'http://127.0.0.1:' + port + '/upload',
   )
   await pasteImage(page)
@@ -199,10 +199,10 @@ try {
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForFunction(() => document.querySelector('.save-status')?.textContent === '已保存')
   console.log('PASS: PicGo HTTP upload receives actual image path and returns URL')
-  await page.evaluate(() => window.slips.updateSettings({ theme: 'dark' }))
+  await page.evaluate(() => window.slipsmd.updateSettings({ theme: 'dark' }))
   await second.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
   await page.screenshot({ path: path.join(output, 'desktop-dark.png') })
-  await page.evaluate(() => window.slips.updateSettings({ theme: 'light' }))
+  await page.evaluate(() => window.slipsmd.updateSettings({ theme: 'light' }))
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'light')
   await page.screenshot({ path: path.join(output, 'desktop-light.png') })
   console.log('PASS: theme is broadcast across independent windows')
@@ -230,7 +230,7 @@ try {
       document.querySelector('.primary-document .cm-content')?.getAttribute('contenteditable') ===
       'false',
   )
-  await page.evaluate(() => window.slips.closeWindow()).catch(() => {})
+  await page.evaluate(() => window.slipsmd.closeWindow()).catch(() => {})
   await second.bringToFront()
   await second.evaluate(() => window.dispatchEvent(new Event('focus')))
   await second.waitForFunction(
@@ -262,5 +262,5 @@ try {
 } finally {
   await application?.close()
   await new Promise((resolve) => server.close(resolve))
-  if (!process.env.SLIPS_MD_KEEP_TEST_DATA) await fs.rm(temp, { recursive: true, force: true })
+  if (!process.env.SLIPSMD_KEEP_TEST_DATA) await fs.rm(temp, { recursive: true, force: true })
 }

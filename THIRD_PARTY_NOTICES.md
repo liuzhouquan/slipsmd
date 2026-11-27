@@ -2,7 +2,7 @@
 
 Generated from the locked production dependency tree. Electron distributions also include Chromium / Node notices in LICENSE and LICENSES.chromium.html.
 
-slips.md references the product ideas of Files.md and Typora; no code from those applications or MarkText/Muya is included.
+SlipsMD references the product ideas of Files.md and Typora; no code from those applications or MarkText/Muya is included.
 
 ## @codemirror/autocomplete@6.20.4
 

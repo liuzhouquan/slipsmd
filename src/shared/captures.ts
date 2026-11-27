@@ -1,13 +1,13 @@
 import type { Capture } from './types'
 
 // The old prefix is a persisted file format, retained only to read existing notes.
-const prefixes = ['slips', 'inkisle'] as const
+const prefixes = ['slipsmd', 'slips', 'inkisle'] as const
 const prefixPattern = `(?:${prefixes.join('|')})`
 const metadataPattern = new RegExp(`^<!-- ${prefixPattern}-(capture|archived|from):.*-->$`)
 type MarkerKind = 'capture' | 'archived' | 'from'
 
 export function captureMarker(kind: MarkerKind, id: string, time?: string): string {
-  return `<!-- slips-${kind}:${id}${time ? ' ' + time : ''} -->`
+  return `<!-- slipsmd-${kind}:${id}${time ? ' ' + time : ''} -->`
 }
 
 export function hasCaptureSource(text: string, id: string): boolean {

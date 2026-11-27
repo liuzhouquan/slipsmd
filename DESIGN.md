@@ -1,4 +1,4 @@
-# slips.md interface
+# SlipsMD interface
 
 Confirmed direction: Typora-like white, quiet, uncluttered. Mode: Operate / Read.
 

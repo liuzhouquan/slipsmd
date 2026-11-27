@@ -6,9 +6,9 @@ import { importLegacyProfiles } from '../src/main/migration'
 
 let root: string, legacy: string, current: string
 beforeEach(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), 'slips-migration-'))
+  root = await fs.mkdtemp(path.join(os.tmpdir(), 'slipsmd-migration-'))
   legacy = path.join(root, 'previous-profile')
-  current = path.join(root, 'slips.md')
+  current = path.join(root, 'slipsmd')
   await fs.mkdir(path.join(legacy, 'drafts'), { recursive: true })
   await fs.mkdir(path.join(legacy, 'pending-images'))
   await fs.writeFile(path.join(legacy, 'settings.json'), '{"theme":"dark"}')
@@ -49,5 +49,28 @@ describe('profile migration', () => {
     await fs.rm(path.join(current, 'drafts', 'note.json'))
     await importLegacyProfiles(current, [legacy])
     await expect(fs.access(path.join(current, 'drafts', 'note.json'))).rejects.toThrow()
+  })
+
+  it('prefers the newest initialized profile without resurrecting older resolved drafts', async () => {
+    const latest = path.join(root, 'latest-profile')
+    await fs.mkdir(latest)
+    await fs.writeFile(path.join(latest, '.legacy-profile-imported'), '1\n')
+    await fs.writeFile(path.join(latest, 'settings.json'), '{"theme":"system"}')
+    await importLegacyProfiles(current, [latest, legacy])
+    expect(await fs.readFile(path.join(current, 'settings.json'), 'utf8')).toBe(
+      '{"theme":"system"}',
+    )
+    await expect(fs.access(path.join(current, 'drafts', 'note.json'))).rejects.toThrow()
+    await expect(fs.access(path.join(current, 'pending-images', 'image.png'))).rejects.toThrow()
+  })
+
+  it('falls back to the older profile when a newer directory contains only browser cache', async () => {
+    const incomplete = path.join(root, 'cache-only-profile')
+    await fs.mkdir(incomplete)
+    await fs.writeFile(path.join(incomplete, 'Cookies'), 'cache')
+    await importLegacyProfiles(current, [incomplete, legacy])
+    expect(await fs.readFile(path.join(current, 'drafts', 'note.json'), 'utf8')).toBe(
+      'unsaved text',
+    )
   })
 })

@@ -53,7 +53,7 @@ function stage() {
   const value = text()
   pending = pending
     .catch(() => {})
-    .then(() => window.slips.stageDocument(props.document.path, value, revision))
+    .then(() => window.slipsmd.stageDocument(props.document.path, value, revision))
     .catch((e) => {
       error.value = e.message
       throw e
@@ -70,7 +70,7 @@ async function save(): Promise<boolean> {
   if (!dirty.value || props.document.readOnly) return true
   const version = generation
   const operation = pending.then(async () => {
-    const result = await window.slips.saveDocument(props.document.path)
+    const result = await window.slipsmd.saveDocument(props.document.path)
     revision = result.revision
     if (generation === version) {
       dirty.value = false
@@ -92,7 +92,7 @@ async function save(): Promise<boolean> {
 async function reload() {
   if (!confirm('放弃当前编辑并载入磁盘版本？恢复草稿也会被清除。')) return
   try {
-    const doc = await window.slips.reloadDocument(props.document.path)
+    const doc = await window.slipsmd.reloadDocument(props.document.path)
     pending = Promise.resolve()
     apply(doc)
     error.value = ''
@@ -105,7 +105,7 @@ async function reload() {
 async function copy() {
   try {
     await pending
-    const path = await window.slips.saveCopy(props.document.path)
+    const path = await window.slipsmd.saveCopy(props.document.path)
     if (path) status.value = '副本已保存：' + path
   } catch (e) {
     error.value = (e as Error).message
@@ -190,7 +190,7 @@ async function pasteImage(event: ClipboardEvent) {
   const file = item.getAsFile()
   if (!file) return
   const operation = crypto.randomUUID()
-  const placeholder = `![正在处理图片](slips-pending:${operation})`
+  const placeholder = `![正在处理图片](slipsmd-pending:${operation})`
   view.dispatch(view.state.replaceSelection(placeholder))
   uploading++
   status.value = '正在处理图片…'
@@ -201,7 +201,7 @@ async function pasteImage(event: ClipboardEvent) {
       r.onerror = reject
       r.readAsDataURL(file)
     })
-    const url = await window.slips.uploadImage(props.document.path, dataUrl)
+    const url = await window.slipsmd.uploadImage(props.document.path, dataUrl)
     if (destroyed) return
     const index = text().indexOf(placeholder)
     if (index >= 0)

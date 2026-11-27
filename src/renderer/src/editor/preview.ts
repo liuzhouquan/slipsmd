@@ -137,7 +137,7 @@ class ImageWidget extends WidgetType {
     img.addEventListener('error', failed)
     if (/^https?:\/\//i.test(this.src)) img.src = this.src
     else
-      void window.slips
+      void window.slipsmd
         .image(this.file, this.src)
         .then((url) => {
           img.src = url

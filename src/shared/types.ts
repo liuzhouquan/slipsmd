@@ -82,6 +82,6 @@ export interface DesktopAPI {
 }
 declare global {
   interface Window {
-    slips: DesktopAPI
+    slipsmd: DesktopAPI
   }
 }

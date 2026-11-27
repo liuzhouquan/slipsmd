@@ -1,7 +1,7 @@
 appId: io.slipsmd.desktop
-productName: slips.md
-executableName: slips-md
-artifactName: slips.md-${version}-${arch}.${ext}
+productName: SlipsMD
+executableName: slipsmd
+artifactName: slipsmd-${version}-${arch}.${ext}
 directories:
   output: dist
 files:

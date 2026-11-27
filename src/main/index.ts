@@ -12,10 +12,10 @@ import { captureMarker, hasCaptureSource, parseCaptures } from '../shared/captur
 import type { AppEvent, FileNode, Settings, Workspace } from '../shared/types'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-app.setName('slips.md')
+app.setName('SlipsMD')
 app.setPath(
   'userData',
-  process.env.SLIPS_MD_USER_DATA ?? path.join(app.getPath('appData'), 'slips.md'),
+  process.env.SLIPSMD_USER_DATA ?? path.join(app.getPath('appData'), 'slipsmd'),
 )
 if (process.platform === 'win32') app.setAppUserModelId('io.slipsmd.desktop')
 interface WindowState {
@@ -36,13 +36,13 @@ let settings: Settings = {
 let settingsQueue = Promise.resolve()
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json')
 const send = (state: WindowState, event: AppEvent) => {
-  if (!state.win.isDestroyed()) state.win.webContents.send('slips:event', event)
+  if (!state.win.isDestroyed()) state.win.webContents.send('slipsmd:event', event)
 }
 const broadcast = (event: AppEvent) => {
   for (const state of states.values()) send(state, event)
 }
 const filters = [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
-const excluded = new Set(['.git', 'node_modules', '.obsidian', '.slips', 'dist'])
+const excluded = new Set(['.git', 'node_modules', '.obsidian', '.slipsmd', 'dist'])
 function assertText(value: unknown, limit = 32768): asserts value is string {
   if (typeof value !== 'string' || value.length > limit || value.includes('\0'))
     throw new Error('参数无效。')
@@ -155,7 +155,7 @@ async function openWindow(file?: string, root?: string | null) {
     height: 840,
     minWidth: 760,
     minHeight: 540,
-    title: 'slips.md',
+    title: 'SlipsMD',
     icon: path.join(here, '../../build/icon.png'),
     backgroundColor: settings.theme === 'dark' ? '#1e2023' : '#ffffff',
     show: false,
@@ -198,7 +198,7 @@ async function openWindow(file?: string, root?: string | null) {
   else await win.loadFile(path.join(here, '../renderer/index.html'))
   // A renderer flushes its pending edits before acknowledging the close command.
   win.webContents.on('ipc-message', (_event, channel) => {
-    if (channel === 'slips:close-ready' && !store.dirty(win.webContents.id)) {
+    if (channel === 'slipsmd:close-ready' && !store.dirty(win.webContents.id)) {
       allowClose = true
       win.close()
     }
@@ -219,7 +219,7 @@ async function readCaptures(state: WindowState) {
   return parseCaptures(store.getText(file) ?? (await fs.readFile(file, 'utf8')))
 }
 function handle(name: string, callback: (state: WindowState, ...args: any[]) => unknown) {
-  ipcMain.handle('slips:' + name, async (event, ...args) => {
+  ipcMain.handle('slipsmd:' + name, async (event, ...args) => {
     const state = states.get(event.sender.id)
     if (!state || event.senderFrame !== event.sender.mainFrame)
       return { ok: false, error: '无效窗口。' }
@@ -458,7 +458,7 @@ function registerHandlers() {
   })
   handle('closeWindow', async (state) => {
     if (store.dirty(state.win.webContents.id)) throw new Error('仍有未保存文件。')
-    state.win.webContents.send('slips:close-confirmed')
+    state.win.webContents.send('slipsmd:close-confirmed')
     return true
   })
 }
@@ -491,11 +491,11 @@ if (hasInstanceLock)
   app
     .whenReady()
     .then(async () => {
-      if (!process.env.SLIPS_MD_USER_DATA) {
+      if (!process.env.SLIPSMD_USER_DATA) {
         // These names identify pre-rename profiles, not the current application.
         await importLegacyProfiles(
           app.getPath('userData'),
-          ['Inkisle', 'inkisle'].map((name) => path.join(app.getPath('appData'), name)),
+          ['slips.md', 'Inkisle', 'inkisle'].map((name) => path.join(app.getPath('appData'), name)),
         )
       }
       try {
@@ -552,10 +552,10 @@ if (hasInstanceLock)
           },
         ]),
       )
-      let initial = process.env.SLIPS_MD_OPEN_FILE
+      let initial = process.env.SLIPSMD_OPEN_FILE
       const cli = markdownArgument(process.argv)
       if (!initial && cli) initial = await fs.realpath(cli).catch(() => undefined)
-      await openWindow(initial, process.env.SLIPS_MD_WORKSPACE)
+      await openWindow(initial, process.env.SLIPSMD_WORKSPACE)
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) void openWindow()
       })

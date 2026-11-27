@@ -1,13 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DesktopAPI, AppEvent } from '../shared/types'
 const invoke = async <T>(method: string, ...args: unknown[]): Promise<T> => {
-  const result = await ipcRenderer.invoke('slips:' + method, ...args)
+  const result = await ipcRenderer.invoke('slipsmd:' + method, ...args)
   if (!result.ok) throw new Error(result.error)
   return result.value
 }
 const api: DesktopAPI = {
   closeWindow: async () => {
-    ipcRenderer.send('slips:close-ready')
+    ipcRenderer.send('slipsmd:close-ready')
   },
   bootstrap: () => invoke('bootstrap'),
   openFolder: () => invoke('openFolder'),
@@ -32,8 +32,8 @@ const api: DesktopAPI = {
   external: (url) => invoke('external', url),
   onEvent: (callback) => {
     const listener = (_: unknown, event: AppEvent) => callback(event)
-    ipcRenderer.on('slips:event', listener)
-    return () => ipcRenderer.removeListener('slips:event', listener)
+    ipcRenderer.on('slipsmd:event', listener)
+    return () => ipcRenderer.removeListener('slipsmd:event', listener)
   },
 }
-contextBridge.exposeInMainWorld('slips', api)
+contextBridge.exposeInMainWorld('slipsmd', api)

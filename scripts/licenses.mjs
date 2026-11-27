@@ -11,7 +11,7 @@ const paths = execFileSync(process.execPath, [npm, 'ls', '--parseable', '--all',
   .slice(1)
 const seen = new Set()
 let output =
-  '# Third-party notices\n\nGenerated from the locked production dependency tree. Electron distributions also include Chromium / Node notices in LICENSE and LICENSES.chromium.html.\n\nslips.md references the product ideas of Files.md and Typora; no code from those applications or MarkText/Muya is included.\n'
+  '# Third-party notices\n\nGenerated from the locked production dependency tree. Electron distributions also include Chromium / Node notices in LICENSE and LICENSES.chromium.html.\n\nSlipsMD references the product ideas of Files.md and Typora; no code from those applications or MarkText/Muya is included.\n'
 for (const dir of paths) {
   const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
   const id = pkg.name + '@' + pkg.version

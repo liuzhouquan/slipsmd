@@ -13,7 +13,7 @@ import EditorPane from './components/EditorPane.vue'
 import FileTree from './components/FileTree.vue'
 import Icon from './components/Icon.vue'
 type Pane = InstanceType<typeof EditorPane>
-const api = window.slips
+const api = window.slipsmd
 const workspace = ref<Workspace | null>(null)
 const mainDoc = ref<DocumentSnapshot | null>(null)
 const rightDoc = ref<DocumentSnapshot | null>(null)
@@ -109,7 +109,7 @@ async function openDocument(file: string, newWindow = false) {
     const doc = await api.readDocument(file)
     if (previous) await api.releaseDocument(previous.path)
     mainDoc.value = doc
-    document.title = basename(doc.path) + ' — slips.md'
+    document.title = basename(doc.path) + ' — SlipsMD'
     await updateLinks()
   })
 }
@@ -174,7 +174,7 @@ async function openFolder() {
     workspace.value = next
     linkInfo.value = { outgoing: [], backlinks: [] }
     showChat.value = false
-    document.title = 'slips.md'
+    document.title = 'SlipsMD'
   })
 }
 async function openFile() {
@@ -336,7 +336,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand"><Icon name="ink" :size="25" /><strong>slips.md</strong></div>
+      <div class="brand"><Icon name="ink" :size="25" /><strong>SlipsMD</strong></div>
       <div class="sidebar-actions">
         <button @click="openFolder" title="打开文件夹 · Ctrl+Shift+O">
           <Icon name="folder" /><span>打开文件夹</span></button
@@ -391,7 +391,7 @@ onBeforeUnmount(() => {
     <main class="main-area">
       <header class="app-toolbar">
         <div class="breadcrumb">
-          <span>{{ workspace?.name || 'slips.md' }}</span><Icon
+          <span>{{ workspace?.name || 'SlipsMD' }}</span><Icon
             v-if="mainDoc"
             name="chevron"
             :size="13"
@@ -640,7 +640,7 @@ onBeforeUnmount(() => {
             @change="updateSettings({ picgoUrl: ($event.target as HTMLInputElement).value })"
         /></label>
         <p class="muted">
-          请在 PicGo 中启用服务并配置图床。slips.md 只接收上传后的图片链接。
+          请在 PicGo 中启用服务并配置图床。SlipsMD 只接收上传后的图片链接。
         </p></template
       >
       <p class="muted settings-footnote">
