@@ -22,7 +22,7 @@
 
 ## 下载和运行
 
-首版 Windows 安装包和 zip 从 [GitHub Actions](https://github.com/liuzhouquan/Inkisle/actions) 成功的 **Build and verify** 任务下载 `Inkisle-Windows` artifact。下载 artifact 需要登录 GitHub。也可在本地构建；没有经过代码签名的 alpha 包可能触发 Windows 的未知发布者提示。
+首版 Windows x64 安装包和 zip 见 [Releases](https://github.com/liuzhouquan/Inkisle/releases/tag/v0.1.0-alpha.1)。Linux 归档可从 [已通过的 GitHub Actions](https://github.com/liuzhouquan/Inkisle/actions/runs/45961919952) 下载 `Inkisle-Linux` artifact（需要登录 GitHub）。也可在本地构建；没有经过代码签名的 alpha 包可能触发 Windows 的未知发布者提示。
 
 开发环境需要 Node.js 24 与 npm。先安装依赖，再启动：
 
@@ -71,7 +71,7 @@ PicGo 设置：在 PicGo 中配置图床并启用本地服务，在 Inkisle 设�
 - 本地图片只在已授权文件目录／工作区内解析；首版支持 PNG、JPEG、GIF、WebP。
 - 文件必须为 UTF-8；首版限制为单文件 20 MB、工作区 10,000 份 Markdown。大型工作区的扫描与索引尚待性能优化。
 - 暂不包含：窗口内 tabs、外部目录收藏、多工作区双链、图谱、Telegram、远程 Web 编辑、Mermaid 渲染、PDF 导出、内部标题锚点跳转、文件重命名和删除 UI。
-- macOS 未验证；Windows 构建和自动化验证以 Actions 结果为准。真实 Windows 中文输入法组合输入、真实 PicGo 程序和不同第三方同步客户端仍需人工验收。
+- macOS 未验证；Windows 与 Ubuntu 已通过 CI 的构建、源码启动及打包后桌面流程。真实 Windows 中文输入法组合输入、真实 PicGo 程序和不同第三方同步客户端仍需人工验收。
 
 ## 开发结构
 
