@@ -36,6 +36,7 @@ const status = ref(props.document.recovered ? '已恢复草稿，请检查后保
 const preview = ref(true)
 const dirty = ref(props.document.dirty)
 const source = new Compartment()
+const access = new Compartment()
 let view: EditorView
 let pending = Promise.resolve()
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -246,17 +247,19 @@ onMounted(() => {
             { tag: tags.emphasis, fontStyle: 'italic' },
             { tag: [tags.url, tags.link], color: 'var(--accent)' },
             { tag: tags.comment, color: 'var(--muted)' },
-            { tag: [tags.keyword, tags.operator], color: '#95643a' },
-            { tag: tags.string, color: '#32796a' },
-            { tag: tags.number, color: '#8c5b8e' },
+            { tag: [tags.keyword, tags.operator], color: 'var(--syntax-keyword)' },
+            { tag: tags.string, color: 'var(--syntax-string)' },
+            { tag: tags.number, color: 'var(--syntax-number)' },
             { tag: tags.meta, color: 'var(--muted)' },
           ]),
         ),
         autocompletion({ override: [completeLink], interactionDelay: 0 }),
         Prec.highest(keymap.of(completionKeymap)),
         EditorView.lineWrapping,
-        EditorState.readOnly.of(props.document.readOnly),
-        EditorView.editable.of(!props.document.readOnly),
+        access.of([
+          EditorState.readOnly.of(props.document.readOnly),
+          EditorView.editable.of(!props.document.readOnly),
+        ]),
         EditorView.contentAttributes.of({ 'aria-label': 'Markdown 编辑器', spellcheck: 'false' }),
         keymap.of([
           {
@@ -307,6 +310,17 @@ watch(
   () => props.document,
   (doc) => {
     if (!dirty.value) apply(doc)
+  },
+)
+watch(
+  () => props.document.readOnly,
+  (readOnly) => {
+    view?.dispatch({
+      effects: access.reconfigure([
+        EditorState.readOnly.of(readOnly),
+        EditorView.editable.of(!readOnly),
+      ]),
+    })
   },
 )
 onBeforeUnmount(() => {

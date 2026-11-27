@@ -133,6 +133,7 @@ try {
     .filter({ hasText: 'Reading' })
     .click({ modifiers: ['Control'] })
   const second = await nextWindow
+  second.on('pageerror', (error) => errors.push(error.message))
   await second.waitForSelector('.primary-document .cm-editor')
   assert.match(await second.locator('.primary-document .document-name').innerText(), /Reading/)
   assert.equal(application.windows().length, 2)
@@ -196,6 +197,30 @@ try {
   )
   assert.deepEqual(errors, [], 'renderer must not throw errors')
   console.log('PASS: no renderer exceptions; conflict reload succeeds')
+  await second.locator('.file-row').filter({ hasText: 'Welcome' }).click()
+  await second.waitForFunction(
+    () =>
+      document.querySelector('.primary-document .cm-content')?.getAttribute('contenteditable') ===
+      'false',
+  )
+  await page.evaluate(() => window.inkisle.closeWindow()).catch(() => {})
+  await second.bringToFront()
+  await second.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await second.waitForFunction(
+    () =>
+      document.querySelector('.primary-document .cm-content')?.getAttribute('contenteditable') ===
+      'true',
+  )
+  await second.locator('.primary-document .cm-content').click()
+  await second.keyboard.press('Control+End')
+  await second.keyboard.insertText('new owner')
+  await second.getByRole('button', { name: '保存', exact: true }).click()
+  await second.waitForFunction(
+    () => document.querySelector('.save-status')?.textContent === '已保存',
+  )
+  assert.ok((await fs.readFile(file, 'utf8')).includes('new owner'))
+  assert.deepEqual(errors, [], 'neither renderer should throw')
+  console.log('PASS: duplicate view is read-only and becomes editable after original window closes')
   console.log('Desktop smoke checks complete. Screenshots: ' + output)
 } catch (error) {
   if (application) {

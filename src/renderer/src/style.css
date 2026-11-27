@@ -1,6 +1,9 @@
 @import 'katex/dist/katex.min.css';
 :root {
   color-scheme: light;
+  --syntax-keyword: #95643a;
+  --syntax-string: #32796a;
+  --syntax-number: #8c5b8e;
   --bg: #fff;
   --sidebar: #f7f8f9;
   --panel: #fafbfc;
@@ -18,6 +21,9 @@
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
+  --syntax-keyword: #e3ba8d;
+  --syntax-string: #a2ccb4;
+  --syntax-number: #d2b2df;
   --bg: #1e2023;
   --sidebar: #191b1e;
   --panel: #24272b;

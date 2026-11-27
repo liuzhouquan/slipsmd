@@ -79,11 +79,14 @@ class TaskWidget extends WidgetType {
     readonly checked: boolean,
     readonly from: number,
     readonly to: number,
+    readonly readOnly: boolean,
   ) {
     super()
   }
   eq(other: TaskWidget) {
-    return other.checked === this.checked && other.from === this.from
+    return (
+      other.checked === this.checked && other.from === this.from && other.readOnly === this.readOnly
+    )
   }
   toDOM(view: EditorView) {
     const el = document.createElement('input')
@@ -151,7 +154,10 @@ export function livePreview(file: string) {
   return StateField.define<DecorationSet>({
     create: (state) => decorations(state, file),
     update: (value, tr) =>
-      tr.docChanged || tr.selection || syntaxTree(tr.startState) !== syntaxTree(tr.state)
+      tr.docChanged ||
+      tr.selection ||
+      tr.reconfigured ||
+      syntaxTree(tr.startState) !== syntaxTree(tr.state)
         ? decorations(tr.state, file)
         : value,
     provide: (field) => EditorView.decorations.from(field),
@@ -251,7 +257,12 @@ function decorations(state: EditorState, file: string): DecorationSet {
           from,
           to,
           Decoration.replace({
-            widget: new TaskWidget(/x/i.test(state.doc.sliceString(from, to)), from, to),
+            widget: new TaskWidget(
+              /x/i.test(state.doc.sliceString(from, to)),
+              from,
+              to,
+              state.readOnly,
+            ),
           }),
         )
       if (name === 'StrongEmphasis') add(from, to, Decoration.mark({ class: 'md-strong' }))

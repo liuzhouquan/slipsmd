@@ -185,6 +185,7 @@ async function openWindow(file?: string, root?: string | null) {
     store.abandon(windowId)
     void state.watcher?.close()
     states.delete(windowId)
+    broadcast({ type: 'filesystem' })
   })
   if (process.env.ELECTRON_RENDERER_URL) await win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else await win.loadFile(path.join(here, '../renderer/index.html'))

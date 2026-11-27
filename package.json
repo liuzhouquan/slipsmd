@@ -19,8 +19,8 @@
     "preview": "electron-vite preview",
     "pack:win": "npm run build && electron-builder --win --x64 --publish never",
     "pack:linux": "npm run build && electron-builder --linux --publish never",
-    "format": "prettier --write src scripts test *.ts *.json *.yml",
-    "format:check": "prettier --check src scripts test *.ts *.json *.yml"
+    "format": "prettier --write src scripts test \"*.ts\" \"*.json\" \"*.yml\" \".github/**/*.yml\"",
+    "format:check": "prettier --check src scripts test \"*.ts\" \"*.json\" \"*.yml\" \".github/**/*.yml\""
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.4",
