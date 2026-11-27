@@ -14,7 +14,7 @@
 
 ## Electron 是否过时
 
-没有。官方持续发布新版本；截至此次调研，稳定发布列表包含 2026-11-24 的更新。是否更适合 Inkisle，要看编辑器兼容、窗口功能和资源占用，不能用“新旧”或未经统计的流行度排序代替选型。[Electron 官方发布列表](https://releases.electronjs.org/release?channel=stable)
+没有。官方持续发布新版本；截至此次调研，稳定发布列表包含 2026-11-24 的更新。是否更适合 slips.md，要看编辑器兼容、窗口功能和资源占用，不能用“新旧”或未经统计的流行度排序代替选型。[Electron 官方发布列表](https://releases.electronjs.org/release?channel=stable)
 
 | 方案 | 独立窗口与文件操作 | 对本项目的收益 | 主要代价 | 建议 |
 | --- | --- | --- | --- | --- |
@@ -28,7 +28,7 @@ Electron 的窗口由主进程控制、编辑 UI 在 renderer 中执行。Tauri 
 
 Wails 官方当前文档将 v3 桌面版本标为稳定，并说明使用 Go 与系统 WebView；不应沿用旧印象笼统称其 v3 为实验版。正式开工时仍需锁定具体稳定版本和平台依赖。[Wails FAQ](https://wails.io/faq/)
 
-Windows 优先会减轻 Tauri / Wails 首期跨引擎验证负担。但 Inkisle 最主要的风险是编辑与文件安全，当前选择 Electron 是为了接近 MarkText 已使用的运行环境；若发行体积成为硬性要求，应在同一原型上比较 Tauri，而非中途重写产品功能。
+Windows 优先会减轻 Tauri / Wails 首期跨引擎验证负担。但 slips.md 最主要的风险是编辑与文件安全，当前选择 Electron 是为了接近 MarkText 已使用的运行环境；若发行体积成为硬性要求，应在同一原型上比较 Tauri，而非中途重写产品功能。
 
 ## Typora 使用什么
 
@@ -54,7 +54,7 @@ Typora 的参考价值在交互和编辑体验。它是商业闭源软件，不�
 - [web/app.js](https://github.com/zakirullin/files.md/blob/946ced9/web/app.js)：onLinkPicked 调用 addBacklink；后者在 files.js 中把反向 Markdown 链接追加到目标正文。
 - [web/lib/theme-brutal-dark.css](https://github.com/zakirullin/files.md/blob/946ced9/web/lib/theme-brutal-dark.css)：暗色 CSS 包在 prefers-color-scheme 媒体查询内。改为显式主题状态是应用层工作，浏览器本身并不禁止独立主题。
 
-**可以复用，但应分层复用。** 直接把现有 web 页面放入 Electron，确实能较快得到桌面窗口；多窗口共享文件、Chat 与编辑器同时写入、根目录与跨文件链接仍需重构。这适合短期可行性样机，不足以证明已具备 Inkisle 的完整数据模型。
+**可以复用，但应分层复用。** 直接把现有 web 页面放入 Electron，确实能较快得到桌面窗口；多窗口共享文件、Chat 与编辑器同时写入、根目录与跨文件链接仍需重构。这适合短期可行性样机，不足以证明已具备 slips.md 的完整数据模型。
 
 ### MarkText / Muya
 
@@ -67,7 +67,7 @@ Typora 的参考价值在交互和编辑体验。它是商业闭源软件，不�
 - [desktop/src/main/app/windowManager.ts](https://github.com/marktext/marktext/blob/95a14e5/packages/desktop/src/main/app/windowManager.ts)：窗口管理与文件监听的参考。
 - [desktop/src/main/ipc/uploader.ts](https://github.com/marktext/marktext/blob/95a14e5/packages/desktop/src/main/ipc/uploader.ts)：已有 PicGo CLI 和自定义上传调用，可参考图片生命周期；Windows .cmd 命令转义需单独处理，不照搬 shell 拼接。
 
-当前建议是提取或依赖编辑核心、参考成熟桌面能力，新建 Inkisle 的工作区与收集流程。完整 fork MarkText 也可行，但随后要维护很多不属于 Inkisle 的产品功能、偏好和菜单；直接拼接两套编辑器会使文件和撤销状态更难统一。
+当前建议是提取或依赖编辑核心、参考成熟桌面能力，新建 slips.md 的工作区与收集流程。完整 fork MarkText 也可行，但随后要维护很多不属于 slips.md 的产品功能、偏好和菜单；直接拼接两套编辑器会使文件和撤销状态更难统一。
 
 ## 编辑核心比较
 
@@ -88,7 +88,7 @@ Milkdown 官方提供 CommonMark、历史等插件组合接口；不是安装一
 
 跨工作区双链不是技术上做不到，主要需要定义路径命名、库身份、移动后的定位、跨设备路径与授权。初期按用户要求不做。图谱可以后消费同一个链接索引，无需现在引入图数据库。
 
-Files.md 的链接常使用 /path.md 表示工作区根路径。Inkisle 要支持导入这种语义，同时优先生成相对 Markdown 链接；不能把它误当 Windows 磁盘根路径。[[标题]] 是否支持、重名如何选择、重命名是否改链，另行明确。
+Files.md 的链接常使用 /path.md 表示工作区根路径。slips.md 要支持导入这种语义，同时优先生成相对 Markdown 链接；不能把它误当 Windows 磁盘根路径。[[标题]] 是否支持、重名如何选择、重命名是否改链，另行明确。
 
 ## PicGo 与 Telegram
 
@@ -108,10 +108,10 @@ Telegram 可以作为远程收集渠道，但不等于整库同步。Bot API 支
 | Obsidian | 反链、面板、收藏及未来图谱 | 作为交互参考，当前不实现跨库图谱 |
 | VS Code | 窗口与文档身份、文件外部修改处理 | 参考思路，不为编辑器导入完整 IDE 框架 |
 
-Obsidian 官方将标签页、分组与独立窗口作为不同组织方式；Bookmarks 支持文件和目录。Inkisle 的全局外部目录快捷方式仍需自己的路径和持久化设计，不能直接等同于库内收藏。[Obsidian Tabs](https://help.obsidian.md/tabs) [Obsidian Bookmarks](https://help.obsidian.md/plugins/bookmarks)
+Obsidian 官方将标签页、分组与独立窗口作为不同组织方式；Bookmarks 支持文件和目录。slips.md 的全局外部目录快捷方式仍需自己的路径和持久化设计，不能直接等同于库内收藏。[Obsidian Tabs](https://help.obsidian.md/tabs) [Obsidian Bookmarks](https://help.obsidian.md/plugins/bookmarks)
 
 Files.md 和 MarkText 根许可证均为 MIT；引入其代码须保留版权与许可，并逐一检查复制的库、字体和素材。[Files.md LICENSE](https://github.com/zakirullin/files.md/blob/946ced9/LICENSE) [MarkText LICENSE](https://github.com/marktext/marktext/blob/95a14e5/LICENSE)
 
 ## 尚未被证实的事
 
-没有承诺启动时间、安装体积、单窗口内存、编辑大文档延迟或完整语法兼容。当前没有框架性能实测，也没有根据网上星数评定哪个框架“更流行”。Muya 的本地示例能解释接口边界，不能替代 Inkisle 在 Windows 上的中文输入和文件往返验证。
+没有承诺启动时间、安装体积、单窗口内存、编辑大文档延迟或完整语法兼容。当前没有框架性能实测，也没有根据网上星数评定哪个框架“更流行”。Muya 的本地示例能解释接口边界，不能替代 slips.md 在 Windows 上的中文输入和文件往返验证。

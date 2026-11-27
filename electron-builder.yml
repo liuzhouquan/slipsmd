@@ -1,6 +1,7 @@
-appId: io.inkisle.desktop
-productName: Inkisle
-artifactName: Inkisle-${version}-${arch}.${ext}
+appId: io.slipsmd.desktop
+productName: slips.md
+executableName: slips-md
+artifactName: slips.md-${version}-${arch}.${ext}
 directories:
   output: dist
 files:

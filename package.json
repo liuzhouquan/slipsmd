@@ -1,6 +1,6 @@
 {
-  "name": "inkisle",
-  "version": "0.1.0-alpha.1",
+  "name": "slips-md",
+  "version": "0.1.0-alpha.2",
   "description": "A quiet Markdown workspace. Capture first, connect later.",
   "private": true,
   "license": "MIT",

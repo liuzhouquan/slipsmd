@@ -3,6 +3,7 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import { syntaxTree } from '@codemirror/language'
 import MarkdownIt from 'markdown-it'
 import katex from 'katex'
+import { isCaptureMetadata } from '../../../shared/captures'
 
 const markdown = new MarkdownIt({ html: false, linkify: false })
 function active(state: EditorState, from: number, to: number) {
@@ -136,7 +137,7 @@ class ImageWidget extends WidgetType {
     img.addEventListener('error', failed)
     if (/^https?:\/\//i.test(this.src)) img.src = this.src
     else
-      void window.inkisle
+      void window.slips
         .image(this.file, this.src)
         .then((url) => {
           img.src = url
@@ -184,10 +185,7 @@ function decorations(state: EditorState, file: string): DecorationSet {
     if (!line.text.trim() && !active(state, line.from, line.to))
       add(line.from, line.from, Decoration.line({ class: 'md-blank' }))
     if (overlaps(code, line.from, line.to)) continue
-    if (
-      /^<!-- inkisle-(capture|archived|from):.*-->$/.test(line.text) &&
-      !active(state, line.from, line.to)
-    )
+    if (isCaptureMetadata(line.text) && !active(state, line.from, line.to))
       add(line.from, line.to, Decoration.replace({}))
     if (line.text.trim() === '$$') {
       let end = n + 1

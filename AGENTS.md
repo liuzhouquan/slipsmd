@@ -1,7 +1,9 @@
-# Inkisle 开发约定
+# slips.md 开发约定
 
 先读 README.md、docs/product.md、docs/decisions.md，再读当前阶段的 docs/roadmap.md。
 
+- 当前品牌为 slips.md，仓库与本地目录同名；npm 包名和可执行文件为 slips-md，应用 ID 为 io.slipsmd.desktop。旧名称仅允许出现在历史数据兼容代码及其测试中。
+- 首期只使用英文品牌，不添加中文名称或中文品牌标识；中文界面文案正常保留。新名称须先检查网页与代码托管平台上的重名情况。
 - Windows 优先；多独立窗口属于核心需求，标签页属于后续需求。
 - 用户之前说的“分页”指窗口管理，不要据此实现纸张分页。
 - 普通 Markdown 文件是用户数据的最终载体，索引与缓存必须可重建。
@@ -9,7 +11,7 @@
 - 不把整库同步、图谱、多工作区双链、Telegram 接入提前塞进首版。
 - 所有编辑、Chat 追加和文件移动经过统一文件服务；防止多窗口互相覆盖。
 - 不把本地文件系统、Electron 或 PicGo 能力直接散落在共享 UI 中，方便未来 Web 入口。
-- 参考仓库位于 ../reference/files.md 和 ../reference/marktext；不要在参考仓库中实现 Inkisle。
+- 参考仓库位于 ../reference/files.md 和 ../reference/marktext；不要在参考仓库中实现 slips.md。
 - 复用代码记录来源提交与许可证；不要假定整个 web/lib 的许可证与仓库根目录相同。
 - 已确认采用 Electron + TypeScript + Vue 3 + CodeMirror 6，MIT 公开仓库；不要重新切换到 Muya。
 - 原生窗口为主，不把纸张分页或 tabs 当作首版要求。

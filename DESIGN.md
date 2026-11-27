@@ -1,4 +1,4 @@
-# Inkisle interface
+# slips.md interface
 
 Confirmed direction: Typora-like white, quiet, uncluttered. Mode: Operate / Read.
 

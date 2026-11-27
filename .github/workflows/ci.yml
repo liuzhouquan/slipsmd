@@ -49,7 +49,7 @@ jobs:
       - uses: actions/upload-artifact@v7.0.2
         if: success()
         with:
-          name: Inkisle-${{ runner.os }}
+          name: slips.md-${{ runner.os }}
           path: |
             dist/*.exe
             dist/*.zip

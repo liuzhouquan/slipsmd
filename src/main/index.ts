@@ -7,10 +7,17 @@ import { watch, type FSWatcher } from 'chokidar'
 import writeFileAtomic from 'write-file-atomic'
 import { DocumentStore, digest } from './documents'
 import { extractLinks, isInside, resolveNote } from './links'
-import type { AppEvent, Capture, FileNode, Settings, Workspace } from '../shared/types'
+import { importLegacyProfiles } from './migration'
+import { captureMarker, hasCaptureSource, parseCaptures } from '../shared/captures'
+import type { AppEvent, FileNode, Settings, Workspace } from '../shared/types'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-if (process.env.INKISLE_USER_DATA) app.setPath('userData', process.env.INKISLE_USER_DATA)
+app.setName('slips.md')
+app.setPath(
+  'userData',
+  process.env.SLIPS_MD_USER_DATA ?? path.join(app.getPath('appData'), 'slips.md'),
+)
+if (process.platform === 'win32') app.setAppUserModelId('io.slipsmd.desktop')
 interface WindowState {
   win: BrowserWindow
   root: string | null
@@ -29,13 +36,13 @@ let settings: Settings = {
 let settingsQueue = Promise.resolve()
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json')
 const send = (state: WindowState, event: AppEvent) => {
-  if (!state.win.isDestroyed()) state.win.webContents.send('inkisle:event', event)
+  if (!state.win.isDestroyed()) state.win.webContents.send('slips:event', event)
 }
 const broadcast = (event: AppEvent) => {
   for (const state of states.values()) send(state, event)
 }
 const filters = [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
-const excluded = new Set(['.git', 'node_modules', '.obsidian', '.inkisle', 'dist'])
+const excluded = new Set(['.git', 'node_modules', '.obsidian', '.slips', 'dist'])
 function assertText(value: unknown, limit = 32768): asserts value is string {
   if (typeof value !== 'string' || value.length > limit || value.includes('\0'))
     throw new Error('参数无效。')
@@ -148,7 +155,7 @@ async function openWindow(file?: string, root?: string | null) {
     height: 840,
     minWidth: 760,
     minHeight: 540,
-    title: 'Inkisle',
+    title: 'slips.md',
     icon: path.join(here, '../../build/icon.png'),
     backgroundColor: settings.theme === 'dark' ? '#1e2023' : '#ffffff',
     show: false,
@@ -191,26 +198,11 @@ async function openWindow(file?: string, root?: string | null) {
   else await win.loadFile(path.join(here, '../renderer/index.html'))
   // A renderer flushes its pending edits before acknowledging the close command.
   win.webContents.on('ipc-message', (_event, channel) => {
-    if (channel === 'inkisle:close-ready' && !store.dirty(win.webContents.id)) {
+    if (channel === 'slips:close-ready' && !store.dirty(win.webContents.id)) {
       allowClose = true
       win.close()
     }
   })
-}
-function captures(text: string): Capture[] {
-  const archived = new Set(
-    [...text.matchAll(/<!-- inkisle-archived:([\w-]+) -->/g)].map((m) => m[1]),
-  )
-  const clean = text.replace(/<!-- inkisle-archived:[\w-]+ -->/g, '')
-  const entries = [
-    ...clean.matchAll(
-      /<!-- inkisle-capture:([\w-]+) ([^ ]+) -->\n([\s\S]*?)(?=<!-- inkisle-capture:|$)/g,
-    ),
-  ]
-  return entries
-    .filter((m) => !archived.has(m[1]))
-    .map((m) => ({ id: m[1], time: m[2], text: m[3].trim() }))
-    .reverse()
 }
 async function chatPath(state: WindowState) {
   if (!state.root) throw new Error('先打开文件夹，为收集箱选择保存位置。')
@@ -224,10 +216,10 @@ async function chatPath(state: WindowState) {
 }
 async function readCaptures(state: WindowState) {
   const file = await chatPath(state)
-  return captures(store.getText(file) ?? (await fs.readFile(file, 'utf8')))
+  return parseCaptures(store.getText(file) ?? (await fs.readFile(file, 'utf8')))
 }
 function handle(name: string, callback: (state: WindowState, ...args: any[]) => unknown) {
-  ipcMain.handle('inkisle:' + name, async (event, ...args) => {
+  ipcMain.handle('slips:' + name, async (event, ...args) => {
     const state = states.get(event.sender.id)
     if (!state || event.senderFrame !== event.sender.mainFrame)
       return { ok: false, error: '无效窗口。' }
@@ -355,7 +347,7 @@ function registerHandlers() {
     const file = await chatPath(state)
     await store.append(
       file,
-      `<!-- inkisle-capture:${randomUUID()} ${new Date().toISOString()} -->\n${text.trim()}`,
+      `${captureMarker('capture', randomUUID(), new Date().toISOString())}\n${text.trim()}`,
     )
     broadcast({ type: 'filesystem' })
     return readCaptures(state)
@@ -367,10 +359,10 @@ function registerHandlers() {
     if (file === source) throw new Error('请选择 Chat.md 以外的笔记。')
     const entry = (await readCaptures(state)).find((c) => c.id === id)
     if (!entry) throw new Error('这条记录已经整理或不存在。')
-    const marker = `<!-- inkisle-from:${entry.id} -->`
+    const marker = captureMarker('from', entry.id)
     const body = store.getText(file) ?? (await fs.readFile(file, 'utf8'))
-    if (!body.includes(marker)) await store.append(file, `${marker}\n${entry.text}`)
-    await store.append(source, `<!-- inkisle-archived:${entry.id} -->`)
+    if (!hasCaptureSource(body, entry.id)) await store.append(file, `${marker}\n${entry.text}`)
+    await store.append(source, captureMarker('archived', entry.id))
     broadcast({ type: 'filesystem' })
     return readCaptures(state)
   })
@@ -466,17 +458,24 @@ function registerHandlers() {
   })
   handle('closeWindow', async (state) => {
     if (store.dirty(state.win.webContents.id)) throw new Error('仍有未保存文件。')
-    state.win.webContents.send('inkisle:close-confirmed')
+    state.win.webContents.send('slips:close-confirmed')
     return true
   })
 }
 function flatten(nodes: FileNode[]): string[] {
   return nodes.flatMap((n) => (n.directory ? flatten(n.children ?? []) : [n.path]))
 }
+const markdownArgument = (argv: string[]) =>
+  argv
+    .slice(1)
+    .filter((arg) => !arg.startsWith('-'))
+    // Chromium/debug flags can precede the development application path.
+    .slice(app.isPackaged ? 0 : 1)
+    .find((arg) => /\.(md|markdown)$/i.test(arg))
 const hasInstanceLock = app.requestSingleInstanceLock()
 if (!hasInstanceLock) app.quit()
 app.on('second-instance', async (_event, argv) => {
-  const candidate = argv.find((arg) => /\.(md|markdown)$/i.test(arg) && !arg.startsWith('-'))
+  const candidate = markdownArgument(argv)
   try {
     if (candidate) await openWindow(await fs.realpath(candidate))
     else {
@@ -492,6 +491,13 @@ if (hasInstanceLock)
   app
     .whenReady()
     .then(async () => {
+      if (!process.env.SLIPS_MD_USER_DATA) {
+        // These names identify pre-rename profiles, not the current application.
+        await importLegacyProfiles(
+          app.getPath('userData'),
+          ['Inkisle', 'inkisle'].map((name) => path.join(app.getPath('appData'), name)),
+        )
+      }
       try {
         const saved = JSON.parse(await fs.readFile(settingsFile(), 'utf8'))
         if (['light', 'dark', 'system'].includes(saved.theme)) settings.theme = saved.theme
@@ -546,10 +552,10 @@ if (hasInstanceLock)
           },
         ]),
       )
-      let initial = process.env.INKISLE_OPEN_FILE
-      const cli = process.argv.find((arg) => /\.(md|markdown)$/i.test(arg) && !arg.startsWith('-'))
+      let initial = process.env.SLIPS_MD_OPEN_FILE
+      const cli = markdownArgument(process.argv)
       if (!initial && cli) initial = await fs.realpath(cli).catch(() => undefined)
-      await openWindow(initial, process.env.INKISLE_WORKSPACE)
+      await openWindow(initial, process.env.SLIPS_MD_WORKSPACE)
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) void openWindow()
       })

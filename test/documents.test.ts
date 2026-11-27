@@ -5,7 +5,7 @@ import os from 'node:os'
 import { DocumentStore } from '../src/main/documents'
 let root: string, file: string, store: DocumentStore
 beforeEach(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), 'inkisle-doc-'))
+  root = await fs.mkdtemp(path.join(os.tmpdir(), 'slips-doc-'))
   file = path.join(root, 'note.md')
   await fs.writeFile(file, '# Original\n')
   store = new DocumentStore(path.join(root, 'drafts'))
