@@ -8,6 +8,8 @@ import type {
   Settings,
   Workspace,
   AppEvent,
+  PinKind,
+  PinnedLocation,
 } from '../../shared/types'
 import EditorPane from './components/EditorPane.vue'
 import FileTree from './components/FileTree.vue'
@@ -24,7 +26,9 @@ const settings = ref<Settings>({
   imageMode: 'local',
   picgoUrl: 'http://127.0.0.1:36677/upload',
   recentWorkspaces: [],
+  pins: [],
 })
+const pinMenu = ref<HTMLDetailsElement>()
 const version = ref('')
 const query = ref('')
 const notice = ref('')
@@ -56,8 +60,21 @@ const basename = (file: string) =>
     .split(/[\\/]/)
     .pop()
     ?.replace(/\.(md|markdown)$/i, '') ?? file
-const relative = (file: string) =>
-  workspace.value ? file.slice(workspace.value.root.length + 1) : file
+const relative = (file: string) => {
+  const root = workspace.value?.root.replace(/[\\/]+$/, '')
+  return root && (file.startsWith(root + '/') || file.startsWith(root + '\\'))
+    ? file.slice(root.length + 1)
+    : file
+}
+const outsideWorkspace = computed(
+  () => !!workspace.value && !!mainDoc.value && relative(mainDoc.value.path) === mainDoc.value.path,
+)
+const pinnedFile = computed(() =>
+  settings.value.pins.find((pin) => pin.kind === 'file' && pin.path === mainDoc.value?.path),
+)
+const pinnedFolder = computed(() =>
+  settings.value.pins.find((pin) => pin.kind === 'folder' && pin.path === workspace.value?.root),
+)
 const wordCount = computed(() => mainDoc.value?.text.trim().length ?? 0)
 const allFiles = computed(() => {
   const collect = (nodes: FileNode[]): string[] =>
@@ -100,18 +117,21 @@ async function openDocument(file: string, newWindow = false) {
       await api.openWindow(file)
       return
     }
-    if (mainDoc.value?.path === file) {
-      mainPane.value?.focus()
-      return
-    }
-    if (rightDoc.value?.path === file) await closeRightInternal()
-    const previous = mainDoc.value
-    const doc = await api.readDocument(file)
-    if (previous) await api.releaseDocument(previous.path)
-    mainDoc.value = doc
-    document.title = basename(doc.path) + ' — SlipsMD'
-    await updateLinks()
+    await openMainInternal(file)
   })
+}
+async function openMainInternal(file: string) {
+  if (mainDoc.value?.path === file) {
+    mainPane.value?.focus()
+    return
+  }
+  if (rightDoc.value?.path === file) await closeRightInternal()
+  const previous = mainDoc.value
+  const doc = await api.readDocument(file)
+  if (previous) await api.releaseDocument(previous.path)
+  mainDoc.value = doc
+  document.title = basename(doc.path) + ' — SlipsMD'
+  await updateLinks()
 }
 async function openRight(file: string, record = true) {
   if (mainDoc.value?.path === file) {
@@ -168,14 +188,47 @@ async function openFolder() {
     if (!(await flushAll())) return
     const next = await api.openFolder()
     if (!next) return
-    if (mainDoc.value) await api.releaseDocument(mainDoc.value.path)
-    await closeRightInternal()
-    mainDoc.value = null
-    workspace.value = next
-    linkInfo.value = { outgoing: [], backlinks: [] }
-    showChat.value = false
-    document.title = 'SlipsMD'
+    await applyWorkspace(next)
   })
+}
+async function applyWorkspace(next: Workspace | null) {
+  if (mainDoc.value) await api.releaseDocument(mainDoc.value.path)
+  await closeRightInternal()
+  mainDoc.value = null
+  workspace.value = next
+  linkInfo.value = { outgoing: [], backlinks: [] }
+  showChat.value = false
+  history.value = []
+  historyIndex.value = -1
+  captures.value = []
+  query.value = ''
+  document.title = 'SlipsMD'
+}
+async function pinLocation(kind: PinKind, path?: string) {
+  if (pinMenu.value) pinMenu.value.open = false
+  await run(async () => {
+    settings.value = await api.pinLocation(kind, path)
+  })
+}
+async function removePin(id: string) {
+  await run(async () => {
+    settings.value = await api.removePin(id)
+  })
+}
+async function openPin(pin: PinnedLocation, newWindow: boolean) {
+  await run(async () => {
+    if (!(await flushAll())) return
+    const navigation = await api.openPin(pin.id, newWindow)
+    if (!navigation) return
+    if (pin.kind === 'folder') {
+      if (workspace.value?.root === navigation.workspace?.root)
+        workspace.value = navigation.workspace
+      else await applyWorkspace(navigation.workspace)
+    } else if (navigation.document) await openMainInternal(navigation.document)
+  })
+}
+function dismissPinMenu(e: Event) {
+  if (pinMenu.value && !pinMenu.value.contains(e.target as Node)) pinMenu.value.open = false
 }
 async function openFile() {
   if (!(await flushAll())) return
@@ -307,6 +360,7 @@ function shortcut(e: KeyboardEvent) {
     document.querySelector<HTMLInputElement>('#file-search')?.focus()
   }
   if (e.key === 'Escape') {
+    if (pinMenu.value) pinMenu.value.open = false
     showSettings.value = false
     showNew.value = false
   }
@@ -315,6 +369,7 @@ onMounted(async () => {
   unsubscribe = api.onEvent(event)
   window.addEventListener('focus', refresh)
   window.addEventListener('keydown', shortcut)
+  window.addEventListener('pointerdown', dismissPinMenu)
   systemTheme.addEventListener('change', applyTheme)
   try {
     const boot = await api.bootstrap()
@@ -330,6 +385,7 @@ onBeforeUnmount(() => {
   unsubscribe?.()
   window.removeEventListener('focus', refresh)
   window.removeEventListener('keydown', shortcut)
+  window.removeEventListener('pointerdown', dismissPinMenu)
   systemTheme.removeEventListener('change', applyTheme)
 })
 </script>
@@ -357,13 +413,69 @@ onBeforeUnmount(() => {
           aria-label="查找笔记"
         /><kbd>Ctrl K</kbd></label
       >
+      <section class="pins-section" aria-label="快捷方式">
+        <div class="workspace-heading">
+          <span>快捷方式</span>
+          <details ref="pinMenu" class="pin-menu">
+            <summary class="icon-button" aria-label="添加快捷方式" title="添加快捷方式">
+              <Icon name="plus" :size="15" />
+            </summary>
+            <div class="pin-menu-items">
+              <button :disabled="busy" @click="pinLocation('file')">
+                <Icon name="file" :size="15" />固定文件…
+              </button>
+              <button :disabled="busy" @click="pinLocation('folder')">
+                <Icon name="folder" :size="15" />固定文件夹…
+              </button>
+            </div>
+          </details>
+        </div>
+        <ul v-if="settings.pins.length" class="pin-list">
+          <li v-for="pin in settings.pins" :key="pin.id" class="pin-row">
+            <button
+              class="file-row pin-open"
+              :class="{
+                selected:
+                  pin.kind === 'folder' ? workspace?.root === pin.path : mainDoc?.path === pin.path,
+              }"
+              :aria-label="
+                (pin.kind === 'folder' ? '打开固定文件夹：' : '打开固定文件：') + pin.name
+              "
+              :title="pin.path + ' · Ctrl+点击在独立窗口打开'"
+              :disabled="busy"
+              @click="openPin(pin, $event.ctrlKey || $event.metaKey)"
+            >
+              <Icon :name="pin.kind === 'folder' ? 'folder' : 'file'" :size="16" /><span>{{
+                pin.kind === 'file' ? basename(pin.name) : pin.name
+              }}</span>
+            </button>
+            <button
+              class="icon-button pin-remove"
+              :aria-label="'取消固定：' + pin.name"
+              title="取消固定（保留文件）"
+              :disabled="busy"
+              @click="removePin(pin.id)"
+            >
+              <Icon name="close" :size="13" />
+            </button>
+          </li>
+        </ul>
+        <p v-else class="pins-empty">固定常用文件或文件夹，随时打开。</p>
+      </section>
       <div class="workspace-heading">
-        <span>{{ workspace?.name || '文件工作区' }}</span><button
+        <span>{{ workspace?.name || '文件工作区' }}</span>
+        <button
+          v-if="workspace"
           class="icon-button"
-          title="刷新文件列表"
-          aria-label="刷新文件列表"
-          @click="refresh"
+          :class="{ 'is-pinned': pinnedFolder }"
+          :aria-label="pinnedFolder ? '取消固定当前工作区' : '固定当前工作区'"
+          :title="pinnedFolder ? '取消固定当前工作区' : '固定当前工作区'"
+          :disabled="busy"
+          @click="pinnedFolder ? removePin(pinnedFolder.id) : pinLocation('folder', workspace.root)"
         >
+          <Icon name="pin" :size="14" />
+        </button>
+        <button class="icon-button" title="刷新文件列表" aria-label="刷新文件列表" @click="refresh">
           <Icon name="refresh" :size="14" />
         </button>
       </div>
@@ -391,13 +503,24 @@ onBeforeUnmount(() => {
     <main class="main-area">
       <header class="app-toolbar">
         <div class="breadcrumb">
-          <span>{{ workspace?.name || 'SlipsMD' }}</span><Icon
+          <span>{{ outsideWorkspace ? '工作区外文件' : workspace?.name || 'SlipsMD' }}</span><Icon
             v-if="mainDoc"
             name="chevron"
             :size="13"
           /><span v-if="mainDoc">{{ basename(mainDoc.path) }}</span>
         </div>
         <div class="toolbar-actions">
+          <button
+            v-if="mainDoc"
+            class="icon-button"
+            :class="{ 'is-pinned': pinnedFile }"
+            :title="pinnedFile ? '取消固定当前笔记' : '固定当前笔记'"
+            :aria-label="pinnedFile ? '取消固定当前笔记' : '固定当前笔记'"
+            :disabled="busy"
+            @click="pinnedFile ? removePin(pinnedFile.id) : pinLocation('file', mainDoc.path)"
+          >
+            <Icon name="pin" />
+          </button>
           <button
             class="icon-button"
             title="打开 Markdown 文件 · Ctrl+O"

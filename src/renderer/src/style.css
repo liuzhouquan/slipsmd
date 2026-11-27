@@ -212,9 +212,80 @@ svg {
   letter-spacing: 0.03em;
 }
 .workspace-heading > span {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.pins-section {
+  margin-bottom: 14px;
+}
+.pin-list {
+  list-style: none;
+  padding: 0 9px;
+  margin: 0;
+  max-height: min(190px, 25vh);
+  overflow-y: auto;
+}
+.pin-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.pin-open {
+  min-width: 0;
+  flex: 1;
+}
+.pin-remove {
+  color: var(--muted);
+}
+.pins-empty {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 3px 20px 7px 23px;
+}
+.pin-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.pin-menu > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 5px;
+  cursor: pointer;
+  list-style: none;
+}
+.pin-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.pin-menu > summary:hover {
+  background: var(--hover);
+}
+.pin-menu-items {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  min-width: 155px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: 5px;
+}
+.pin-menu-items button {
+  width: 100%;
+  border: 0;
+  justify-content: flex-start;
+  font-size: 12px;
+  font-weight: 400;
+  padding: 9px 10px;
+}
+button.is-pinned {
+  color: var(--accent);
 }
 .tree-scroll {
   flex: 1;

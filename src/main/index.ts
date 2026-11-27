@@ -8,6 +8,7 @@ import writeFileAtomic from 'write-file-atomic'
 import { DocumentStore, digest } from './documents'
 import { extractLinks, isInside, resolveNote } from './links'
 import { importLegacyProfiles } from './migration'
+import { addPin, createPin, normalizePins, resolvePin } from './pins'
 import { captureMarker, hasCaptureSource, parseCaptures } from '../shared/captures'
 import type { AppEvent, FileNode, Settings, Workspace } from '../shared/types'
 
@@ -32,6 +33,7 @@ let settings: Settings = {
   imageMode: 'local',
   picgoUrl: 'http://127.0.0.1:36677/upload',
   recentWorkspaces: [],
+  pins: [],
 }
 let settingsQueue = Promise.resolve()
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json')
@@ -252,6 +254,62 @@ function registerHandlers() {
     return file
   })
   handle('refreshWorkspace', workspace)
+  handle('pinLocation', async (state, kind, candidate) => {
+    if (!['file', 'folder'].includes(kind)) throw new Error('快捷方式类型无效。')
+    if (candidate !== undefined) {
+      assertText(candidate)
+      if (kind === 'file') candidate = await grant(state, candidate)
+      else if (!state.root || (await fs.realpath(candidate)) !== state.root)
+        throw new Error('请通过添加快捷方式选择其他文件夹。')
+    } else {
+      const result = await dialog.showOpenDialog(state.win, {
+        title: kind === 'folder' ? '固定文件夹' : '固定 Markdown 文件',
+        properties: [kind === 'folder' ? 'openDirectory' : 'openFile'],
+        ...(kind === 'file' ? { filters } : {}),
+      })
+      if (result.canceled) return settings
+      candidate = result.filePaths[0]
+    }
+    settings.pins = addPin(settings.pins, await createPin(candidate, kind))
+    await persistSettings()
+    broadcast({ type: 'settings', settings })
+    return settings
+  })
+  handle('removePin', async (_state, id) => {
+    assertText(id, 100)
+    settings.pins = settings.pins.filter((pin) => pin.id !== id)
+    await persistSettings()
+    broadcast({ type: 'settings', settings })
+    return settings
+  })
+  handle('openPin', async (state, id, newWindow = false) => {
+    assertText(id, 100)
+    if (typeof newWindow !== 'boolean') throw new Error('窗口参数无效。')
+    const pin = settings.pins.find((item) => item.id === id)
+    if (!pin) throw new Error('快捷方式已被移除，请刷新后重试。')
+    const target = await resolvePin(pin)
+    if (newWindow) {
+      await openWindow(
+        pin.kind === 'file' ? target : undefined,
+        pin.kind === 'folder'
+          ? target
+          : state.root && isInside(state.root, target)
+            ? state.root
+            : undefined,
+      )
+      return null
+    }
+    if (pin.kind === 'folder') {
+      const nodes = await tree(target)
+      if (state.root !== target) await setWorkspace(state, target)
+      return {
+        workspace: { root: target, name: path.basename(target), tree: nodes },
+        document: null,
+      }
+    }
+    state.allowed.add(target)
+    return { workspace: null, document: target }
+  })
   handle('createFile', async (state, name) => {
     assertText(name, 200)
     if (!state.root) throw new Error('请先打开文件夹。')
@@ -311,6 +369,8 @@ function registerHandlers() {
   )
   handle('resolveLink', async (state, source, href) => {
     const file = await grant(state, source)
+    if (state.root && !isInside(state.root, file))
+      throw new Error('这份笔记在当前工作区外，请先打开它所在的文件夹再跟随笔记链接。')
     assertText(href)
     const target = resolveNote(file, href, state.root ?? path.dirname(file))
     if (!target) throw new Error('这不是本地 Markdown 链接。')
@@ -318,6 +378,7 @@ function registerHandlers() {
   })
   handle('links', async (state, candidate) => {
     const file = await grant(state, candidate)
+    if (state.root && !isInside(state.root, file)) return { outgoing: [], backlinks: [] }
     const root = state.root ?? path.dirname(file)
     const paths = state.root ? flatten(await tree(root)) : [file]
     const links = (
@@ -371,8 +432,8 @@ function registerHandlers() {
     assertText(src)
     if (/^https?:\/\//i.test(src)) return new URL(src).href
     const resolved = await fs.realpath(path.resolve(path.dirname(doc), decodeURIComponent(src)))
-    if (!isInside(state.root ?? path.dirname(doc), resolved))
-      throw new Error('图片不在已授权目录内。')
+    const imageRoot = state.root && isInside(state.root, doc) ? state.root : path.dirname(doc)
+    if (!isInside(imageRoot, resolved)) throw new Error('图片不在已授权目录内。')
     const ext = path.extname(resolved).toLowerCase()
     const mime: Record<string, string> = {
       '.png': 'image/png',
@@ -511,6 +572,7 @@ if (hasInstanceLock)
           settings.recentWorkspaces = saved.recentWorkspaces
             .filter((p: unknown) => typeof p === 'string')
             .slice(0, 8)
+        settings.pins = normalizePins(saved.pins)
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.error('Settings:', error)
       }

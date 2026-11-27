@@ -1,9 +1,21 @@
 export type Theme = 'light' | 'dark' | 'system'
+export type PinKind = 'file' | 'folder'
+export interface PinnedLocation {
+  id: string
+  path: string
+  name: string
+  kind: PinKind
+}
+export interface PinNavigation {
+  workspace: Workspace | null
+  document: string | null
+}
 export interface Settings {
   theme: Theme
   imageMode: 'local' | 'picgo'
   picgoUrl: string
   recentWorkspaces: string[]
+  pins: PinnedLocation[]
 }
 export interface FileNode {
   name: string
@@ -67,6 +79,9 @@ export interface DesktopAPI {
   reloadDocument(path: string): Promise<DocumentSnapshot>
   saveCopy(path: string): Promise<string | null>
   openWindow(path?: string): Promise<void>
+  pinLocation(kind: PinKind, path?: string): Promise<Settings>
+  removePin(id: string): Promise<Settings>
+  openPin(id: string, newWindow?: boolean): Promise<PinNavigation | null>
   resolveLink(source: string, href: string): Promise<string>
   links(path: string): Promise<LinkInfo>
   chat(): Promise<Capture[]>

@@ -4,7 +4,7 @@
 
 **Electron + TypeScript + Vue 3 + CodeMirror 6** · MIT · Windows 优先
 
-当前版本为 **0.1.0-alpha.3**。文件直接保存为普通 UTF-8 Markdown，不需要账号或同步服务器。
+当前版本为 **0.1.0-alpha.4**。文件直接保存为普通 UTF-8 Markdown，不需要账号或同步服务器。
 
 ## 首版功能
 
@@ -15,6 +15,7 @@
 - 同工作区出链与反链列表；输入 `[` 补全笔记链接。反链不写入目标正文。
 - Chat 收集箱：无需标题和分类，记录后保存到 Chat.md，之后整理到当前笔记。
 - 粘贴图片保存到笔记旁的 assets 文件夹，或交给本机 PicGo 上传并插入 URL。
+- 左侧快捷方式：固定当前文件／工作区，或选择其他 Markdown 文件和目录；各窗口同步，重启保留，Ctrl+点击可在独立窗口打开。
 - 独立选择亮色、暗色或跟随系统，设置在窗口间同步并持久化。
 - 自动保存、恢复草稿、外部变更检查和冲突时另存副本。未编辑的文件打开后不会重新序列化；保存保留 BOM 和主要换行格式。
 
@@ -22,7 +23,7 @@
 
 ## 下载和运行
 
-Windows x64 安装包、zip 和 Linux tar.gz 见 [Releases](https://github.com/liuzhouquan/slipsmd/releases/tag/v0.1.0-alpha.3)。也可在本地构建；没有经过代码签名的 alpha 包可能触发 Windows 的未知发布者提示。
+Windows x64 安装包、zip 和 Linux tar.gz 见 [Releases](https://github.com/liuzhouquan/slipsmd/releases/tag/v0.1.0-alpha.4)。也可在本地构建；没有经过代码签名的 alpha 包可能触发 Windows 的未知发布者提示。
 
 开发环境需要 Node.js 24 与 npm。先安装依赖，再启动：
 
@@ -64,6 +65,10 @@ Linux 无显示器的测试环境使用 `xvfb-run -a npm run test:desktop`。测
 
 PicGo 设置：在 PicGo 中配置图床并启用本地服务，在 SlipsMD 设置中选择“通过 PicGo 自动上传”；默认地址为 `http://127.0.0.1:36677/upload`。SlipsMD 不接管图床密钥。上传失败时临时图片留在应用数据目录的 `pending-images` 下。
 
+快捷方式：点击正文工具栏的图钉固定当前笔记，或点击文件树标题旁的图钉固定当前工作区。左侧“快捷方式”旁的 + 可从系统选择其他文件或文件夹。单击文件保持当前工作区，单击目录切换工作区；Ctrl+点击在独立窗口打开。取消固定只移除入口，不会删除文件。目标移动或不可用时保留入口并提示重新固定；最多保存 50 项。
+
+外部单文件不加入当前工作区的双链索引；需要浏览它的相邻笔记时，先固定并打开所在文件夹。
+
 ## 数据与边界
 
 - 不开发整库同步；可用 Git、网盘、Syncthing 等工具处理文件。已打开文件出现外部变化时会刷新或提示冲突，不能把两份修改静默覆盖。
@@ -71,8 +76,8 @@ PicGo 设置：在 PicGo 中配置图床并启用本地服务，在 SlipsMD 设�
 - Chat 内容和归档标记保存在普通 Markdown 中。整理会先追加到目标笔记，再将原记录标记为已整理；原始记录保留，便于恢复。
 - 本地图片只在已授权文件目录／工作区内解析；首版支持 PNG、JPEG、GIF、WebP。
 - 文件必须为 UTF-8；首版限制为单文件 20 MB、工作区 10,000 份 Markdown。大型工作区的扫描与索引尚待性能优化。
-- 暂不包含：窗口内 tabs、外部目录收藏、多工作区双链、图谱、Telegram、远程 Web 编辑、Mermaid 渲染、PDF 导出、内部标题锚点跳转、文件重命名和删除 UI。
-- macOS 未验证；Windows 与 Ubuntu 已通过 [CI](https://github.com/liuzhouquan/slipsmd/actions/runs/45998558008) 的构建、源码启动及打包后桌面流程，具体结果见验证说明。真实 Windows 中文输入法组合输入、真实 PicGo 程序和不同第三方同步客户端仍需人工验收。
+- 暂不包含：窗口内 tabs、多工作区双链、图谱、Telegram、远程 Web 编辑、Mermaid 渲染、PDF 导出、内部标题锚点跳转、文件重命名和删除 UI。
+- macOS 未验证；Windows 与 Ubuntu 的构建、源码启动及打包后桌面流程由 [CI](https://github.com/liuzhouquan/slipsmd/actions) 检查，具体结果见验证说明。真实 Windows 中文输入法组合输入、真实 PicGo 程序和不同第三方同步客户端仍需人工验收。
 
 ## 开发结构
 
