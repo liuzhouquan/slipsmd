@@ -16,7 +16,7 @@
 
 桌面测试中的 PicGo 是本机模拟 HTTP 服务：验证请求里传入的是实际临时图片路径，以及返回 URL 被正确写入 Markdown。这不等于已在用户的 PicGo 与图床上测试成功。
 
-本地已通过 22 项文件／链接、Chat 格式兼容和 profile 迁移测试、类型检查、生产构建、源码启动与打包后 Linux 应用两套真实桌面流程。桌面检查覆盖 SlipsMD 显示名、slipsmd preload 桥与可执行文件、旧 Chat 整理、多窗口和图片。Windows / Ubuntu CI 将以本次提交的新记录更新；安装向导和真实输入法仍需人工体验。
+本地已通过 22 项文件／链接、Chat 格式兼容和 profile 迁移测试、类型检查、生产构建、源码启动与打包后 Linux 应用两套真实桌面流程。桌面检查覆盖 SlipsMD 显示名、slipsmd preload 桥与可执行文件、旧 Chat 整理、多窗口和图片。Windows 与 Ubuntu 已通过 [CI 45998558008](https://github.com/liuzhouquan/slipsmd/actions/runs/45998558008)，验证代码提交为 `73d5fba3944820151750384699dd633600fcb8e3`。两个平台均通过 22 项测试、构建、源码启动与打包后桌面流程；Windows 构建了新名称的 NSIS 安装包和 zip。安装向导和真实输入法仍需人工体验。
 
 ## GitHub CI
 

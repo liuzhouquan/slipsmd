@@ -72,7 +72,7 @@ PicGo 设置：在 PicGo 中配置图床并启用本地服务，在 SlipsMD 设�
 - 本地图片只在已授权文件目录／工作区内解析；首版支持 PNG、JPEG、GIF、WebP。
 - 文件必须为 UTF-8；首版限制为单文件 20 MB、工作区 10,000 份 Markdown。大型工作区的扫描与索引尚待性能优化。
 - 暂不包含：窗口内 tabs、外部目录收藏、多工作区双链、图谱、Telegram、远程 Web 编辑、Mermaid 渲染、PDF 导出、内部标题锚点跳转、文件重命名和删除 UI。
-- macOS 未验证；Windows 与 Ubuntu 的构建、源码启动及打包后桌面流程由 [CI](https://github.com/liuzhouquan/slipsmd/actions) 检查，具体结果见验证说明。真实 Windows 中文输入法组合输入、真实 PicGo 程序和不同第三方同步客户端仍需人工验收。
+- macOS 未验证；Windows 与 Ubuntu 已通过 [CI](https://github.com/liuzhouquan/slipsmd/actions/runs/45998558008) 的构建、源码启动及打包后桌面流程，具体结果见验证说明。真实 Windows 中文输入法组合输入、真实 PicGo 程序和不同第三方同步客户端仍需人工验收。
 
 ## 开发结构
 
