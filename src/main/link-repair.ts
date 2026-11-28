@@ -89,6 +89,20 @@ const encodedPath = (file: string) =>
     )
     .join('/')
 
+// win32.relative folds case even when a directory is case-sensitive. Compare
+// normalized segments exactly so generated URLs keep their literal targets.
+function relativePreservingCase(from: string, to: string) {
+  const source = path.resolve(from)
+  const target = path.resolve(to)
+  const base = path.parse(source).root
+  if (base !== path.parse(target).root) throw new Error('不能跨路径根生成相对 URL。')
+  const left = source.slice(base.length).split(path.sep).filter(Boolean)
+  const right = target.slice(base.length).split(path.sep).filter(Boolean)
+  let common = 0
+  while (common < left.length && common < right.length && left[common] === right[common]) common++
+  return [...Array(left.length - common).fill('..'), ...right.slice(common)].join(path.sep)
+}
+
 export function planUrlEdits(text: string, move: MoveContext) {
   if (!path.isAbsolute(move.root)) throw new Error('规划工作区必须使用绝对路径。')
   for (const candidate of [move.source, move.target, move.document])
@@ -241,8 +255,8 @@ export function planUrlEdits(text: string, move: MoveContext) {
     const desired = pathKey(originalTarget) === pathKey(move.source) ? move.target : originalTarget
     if (pathKey(resolve(afterDocument)) === pathKey(desired)) continue
     const rebuilt = rooted
-      ? '/' + encodedPath(path.relative(move.root, desired))
-      : encodedPath(path.relative(path.dirname(afterDocument), desired)) || '.'
+      ? '/' + encodedPath(relativePreservingCase(move.root, desired))
+      : encodedPath(relativePreservingCase(path.dirname(afterDocument), desired)) || '.'
     const after = rebuilt + (directory && !rebuilt.endsWith('/') ? '/' : '') + fragment
     edits.push({ ...url, before, after, line: line + 1 })
     if (edits.length > 10000) {
