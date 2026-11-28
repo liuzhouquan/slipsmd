@@ -1,0 +1,78 @@
+{
+  "source": "d25644d",
+  "script": "npm run benchmark:ui",
+  "samples": {
+    "typingKeystrokesPerMode": 20,
+    "cursorMovesPerMode": 15
+  },
+  "linux": {
+    "node": "v24.18.0",
+    "platform": "linux",
+    "packaged": false,
+    "workload": {
+      "notes": 2000,
+      "folders": 40,
+      "longDocumentLines": 4013,
+      "longDocumentBytes": 82786
+    },
+    "initialScan": {
+      "appReadyMs": 1539.92,
+      "coldLinkIndexMs": 1425.39,
+      "homeBacklinks": 1190,
+      "refreshWorkspaceMs": 123.85
+    },
+    "fileTree": {
+      "totalElements": 12360,
+      "detailsCount": 40,
+      "fileRowsCount": 2000,
+      "filterApplyMs": 80.45,
+      "filteredRowsCount": 11,
+      "filterClearMs": 204.2,
+      "folderToggleMs": 99.16
+    },
+    "longDocument": {
+      "openMs": 467.5,
+      "switchToSourceMs": 150.05,
+      "switchToPreviewMs": 249.75,
+      "livePreview": {
+        "mode": "live-preview",
+        "typing": {
+          "count": 20,
+          "minMs": 49.34,
+          "p50Ms": 66.06,
+          "p95Ms": 101.43,
+          "maxMs": 118.18,
+          "meanMs": 68.32
+        },
+        "cursorMove": {
+          "count": 15,
+          "minMs": 65.85,
+          "p50Ms": 67.16,
+          "p95Ms": 100.58,
+          "maxMs": 100.58,
+          "meanMs": 73.43
+        }
+      },
+      "source": {
+        "mode": "source",
+        "typing": {
+          "count": 20,
+          "minMs": 31.83,
+          "p50Ms": 34.48,
+          "p95Ms": 62.72,
+          "maxMs": 90.55,
+          "meanMs": 43.2
+        },
+        "cursorMove": {
+          "count": 15,
+          "minMs": 32.54,
+          "p50Ms": 34.54,
+          "p95Ms": 61.9,
+          "maxMs": 61.9,
+          "meanMs": 40
+        }
+      }
+    },
+    "scope": "Synthetic desktop UI measurement via Playwright + Electron. Includes IPC and requestAnimationFrame settle; not cross-machine latency guarantees."
+  }
+}

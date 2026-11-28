@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:desktop": "node scripts/desktop.mjs",
     "benchmark:index": "node scripts/benchmark-index.mjs",
+    "benchmark:ui": "node scripts/benchmark-ui.mjs",
     "preview": "electron-vite preview",
     "pack:win": "npm run build && electron-builder --win --x64 --publish never",
     "pack:linux": "npm run build && electron-builder --linux --publish never",
