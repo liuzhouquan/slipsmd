@@ -1,0 +1,97 @@
+{
+  "source": "f5d68f97eb1c62b39726ea9eeb02adb013542bde",
+  "ci": "https://github.com/liuzhouquan/slipsmd/actions/runs/46120203455",
+  "samplesPerScenario": 1,
+  "linux": {
+    "node": "v24.22.3",
+    "platform": "linux",
+    "notes": 1000,
+    "measurements": [
+      {
+        "label": "cold index",
+        "milliseconds": 522.3,
+        "scans": 1,
+        "reads": 1000,
+        "parses": 1000,
+        "hits": 0
+      },
+      {
+        "label": "unchanged repeat query",
+        "milliseconds": 47.17,
+        "scans": 1,
+        "reads": 0,
+        "parses": 0,
+        "hits": 1000
+      },
+      {
+        "label": "one external file edited",
+        "milliseconds": 45.1,
+        "scans": 1,
+        "reads": 1,
+        "parses": 1,
+        "hits": 999
+      },
+      {
+        "label": "four overlapping window queries",
+        "milliseconds": 43.82,
+        "scans": 1,
+        "reads": 0,
+        "parses": 0,
+        "hits": 1000
+      }
+    ],
+    "uncachedBaseline": {
+      "milliseconds": 237.97,
+      "reads": 1000,
+      "parses": 1000,
+      "concurrency": 8
+    },
+    "scope": "Synthetic workspace link queries; includes directory enumeration and metadata. Not full application startup, editor latency or a time threshold."
+  },
+  "windows": {
+    "node": "v24.22.3",
+    "platform": "win32",
+    "notes": 1000,
+    "measurements": [
+      {
+        "label": "cold index",
+        "milliseconds": 653.84,
+        "scans": 1,
+        "reads": 1000,
+        "parses": 1000,
+        "hits": 0
+      },
+      {
+        "label": "unchanged repeat query",
+        "milliseconds": 152.59,
+        "scans": 1,
+        "reads": 0,
+        "parses": 0,
+        "hits": 1000
+      },
+      {
+        "label": "one external file edited",
+        "milliseconds": 120.44,
+        "scans": 1,
+        "reads": 1,
+        "parses": 1,
+        "hits": 999
+      },
+      {
+        "label": "four overlapping window queries",
+        "milliseconds": 135.47,
+        "scans": 1,
+        "reads": 0,
+        "parses": 0,
+        "hits": 1000
+      }
+    ],
+    "uncachedBaseline": {
+      "milliseconds": 335.16,
+      "reads": 1000,
+      "parses": 1000,
+      "concurrency": 8
+    },
+    "scope": "Synthetic workspace link queries; includes directory enumeration and metadata. Not full application startup, editor latency or a time threshold."
+  }
+}
