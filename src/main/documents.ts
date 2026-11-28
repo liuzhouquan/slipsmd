@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import writeFileAtomic from 'write-file-atomic'
+import { isInside } from './links'
 import type { DocumentSnapshot } from '../shared/types'
 
 export const digest = (bytes: Uint8Array | string) =>
@@ -279,6 +280,101 @@ export class DocumentStore {
       session.path = target
       this.sessions.set(target, session)
       return this.snapshot(session, owner)
+    }
+    return lock(0)
+  }
+  async relocateFolder(
+    sourceDir: string,
+    targetDir: string,
+  ): Promise<{ previous: string; document: DocumentSnapshot; owner: number }[]> {
+    if (sourceDir === targetDir) return []
+    const affected = [...this.sessions.values()].filter((s) => isInside(sourceDir, s.path))
+    const paths = [
+      ...new Set(
+        [sourceDir, targetDir, ...affected.map((s) => s.path)].map((p) =>
+          process.platform === 'win32' ? p.toLowerCase() : p,
+        ),
+      ),
+    ].sort()
+    const lock = (
+      index: number,
+    ): Promise<{ previous: string; document: DocumentSnapshot; owner: number }[]> =>
+      index < paths.length ? this.serial(paths[index], () => lock(index + 1)) : move()
+    const move = async () => {
+      const currentAffected = [...this.sessions.values()].filter((s) => isInside(sourceDir, s.path))
+      if (
+        currentAffected.length !== affected.length ||
+        currentAffected.some((s) => !affected.includes(s))
+      )
+        throw new Error('文件夹正在被其他操作访问，请稍后再试。')
+      if ([...this.sessions.values()].some((s) => isInside(targetDir, s.path)))
+        throw new Error('目标路径下已有打开的笔记，请选择其他位置。')
+      let beforeStat
+      try {
+        beforeStat = await fs.lstat(sourceDir)
+      } catch {
+        throw new Error('源路径不再是普通文件夹，请刷新后重试。')
+      }
+      if (!beforeStat.isDirectory()) throw new Error('源路径不再是普通文件夹，请刷新后重试。')
+      try {
+        await fs.lstat(targetDir)
+        throw new Error('目标已存在，未覆盖任何文件或文件夹。请使用其他名称。')
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+      for (const session of affected) {
+        if (session.dirty) throw new Error('文件夹内有未保存的笔记，请先保存后再重命名或移动。')
+        const bytes = await this.bytes(session.path)
+        if (digest(bytes) !== session.revision)
+          throw new Error('文件夹内有笔记已被外部程序修改，请先载入磁盘版本或处理冲突。')
+      }
+      try {
+        const draftEntries = await fs.readdir(this.recoveryDir)
+        for (const entry of draftEntries) {
+          if (!entry.endsWith('.json')) continue
+          let draft: { path?: unknown } | undefined
+          try {
+            draft = JSON.parse(await fs.readFile(path.join(this.recoveryDir, entry), 'utf8'))
+          } catch {
+            continue
+          }
+          if (typeof draft?.path !== 'string') continue
+          if (isInside(targetDir, draft.path))
+            throw new Error('目标路径下存在恢复草稿，请先恢复或备份该草稿，再使用此路径。')
+          if (isInside(sourceDir, draft.path))
+            throw new Error('文件夹内存在未恢复的草稿，请先打开并保存或处理该笔记后再移动。')
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+      try {
+        await fs.rename(sourceDir, targetDir)
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (['EEXIST', 'ENOTEMPTY'].includes(code ?? ''))
+          throw new Error('目标已存在，未覆盖任何文件或文件夹。请使用其他名称。')
+        if (['EXDEV', 'ENOTSUP', 'EOPNOTSUPP'].includes(code ?? ''))
+          throw new Error(
+            '此位置不支持安全移动；请使用同一磁盘内的文件夹，或在系统文件管理器中操作。',
+          )
+        if (['EPERM', 'EACCES', 'EBUSY'].includes(code ?? ''))
+          throw new Error('无法在这两个位置安全移动，请检查写入权限或关闭占用该文件夹的程序。')
+        throw error
+      }
+      const moved: { previous: string; document: DocumentSnapshot; owner: number }[] = []
+      for (const session of affected) {
+        const previous = session.path
+        const nextPath = path.join(targetDir, path.relative(sourceDir, previous))
+        this.sessions.delete(previous)
+        session.path = nextPath
+        this.sessions.set(nextPath, session)
+        moved.push({
+          previous,
+          document: this.snapshot(session, session.owner),
+          owner: session.owner,
+        })
+      }
+      return moved
     }
     return lock(0)
   }

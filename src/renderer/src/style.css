@@ -338,10 +338,23 @@ button.is-pinned {
   cursor: pointer;
 }
 .file-tree summary > span {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.file-tree .tree-action {
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+  color: var(--muted);
+  transition: opacity 120ms ease;
+}
+.file-tree summary:hover .tree-action,
+.file-tree summary:focus-within .tree-action,
+.file-tree .tree-action:focus-visible {
+  opacity: 1;
 }
 .file-tree summary > svg {
   flex-shrink: 0;

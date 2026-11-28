@@ -44,6 +44,7 @@ const busy = ref(false)
 const relocating = ref(false)
 const moveDialog = ref<HTMLDialogElement>()
 const moveInput = ref<HTMLInputElement>()
+const moveKind = ref<'file' | 'folder'>('file')
 const moveSource = ref('')
 const moveDestination = ref('')
 const moveError = ref('')
@@ -125,6 +126,7 @@ async function run(task: () => Promise<unknown>) {
 }
 async function showMove(file: string) {
   if (busy.value || moveDialog.value?.open || createDialog.value?.open) return
+  moveKind.value = 'file'
   moveSource.value = file
   moveDestination.value = moveInWorkspace.value ? relative(file) : file.split(/[\\/]/).pop()!
   moveError.value = ''
@@ -136,6 +138,36 @@ async function showMove(file: string) {
     Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\')) + 1,
     value.lastIndexOf('.'),
   )
+}
+async function showMoveFolder(folder: string) {
+  if (busy.value || moveDialog.value?.open || createDialog.value?.open || !workspace.value) return
+  moveKind.value = 'folder'
+  moveSource.value = folder
+  moveDestination.value = relative(folder)
+  moveError.value = ''
+  moveDialog.value!.showModal()
+  await nextTick()
+  moveInput.value!.focus()
+  const value = moveDestination.value
+  moveInput.value!.setSelectionRange(
+    Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\')) + 1,
+    value.length,
+  )
+}
+function applyFolderMove(previous: string, nextPath: string) {
+  if (previous === nextPath) return
+  if (creationFolder.value) {
+    const normalizedPrev = previous.replace(/[\\/]+$/, '')
+    const normalizedCur = creationFolder.value.replace(/[\\/]+$/, '')
+    if (normalizedCur === normalizedPrev) creationFolder.value = nextPath
+    else if (
+      normalizedCur.startsWith(normalizedPrev + '/') ||
+      normalizedCur.startsWith(normalizedPrev + '\\')
+    ) {
+      const suffix = normalizedCur.slice(normalizedPrev.length)
+      creationFolder.value = nextPath.replace(/[\\/]+$/, '') + suffix
+    }
+  }
 }
 function applyMove(previous: string, doc: DocumentSnapshot) {
   if (previous === doc.path) return
@@ -163,24 +195,42 @@ async function moveDocument() {
   moveError.value = ''
   await nextTick()
   let movedPath: string | undefined
+  let movedFolderPath: string | undefined
   try {
     if (!(await flushAll())) {
       moveError.value = '正文尚未保存。请取消并处理保存错误或等待图片处理完成。'
       return
     }
     const previous = moveSource.value
-    const result = await api.moveDocument(previous, moveDestination.value.trim())
-    movedPath = result.document.path
-    applyMove(previous, result.document)
-    moveDialog.value!.close()
-    notify(
-      result.warning ??
-        (result.document.path === previous
-          ? '文件位置未改变。'
-          : '已移至 ' + relative(result.document.path) + '。请检查原有链接与相对图片路径。'),
-      !!result.warning,
-    )
-    await refresh()
+    if (moveKind.value === 'folder') {
+      const result = await api.moveFolder(previous, moveDestination.value.trim())
+      movedFolderPath = result.path
+      applyFolderMove(previous, result.path)
+      moveDialog.value!.close()
+      notify(
+        result.warning ??
+          (result.path === previous
+            ? '文件夹位置未改变。'
+            : '已移至 ' + relative(result.path) + '。请检查原有链接与相对图片路径。'),
+        !!result.warning,
+      )
+      await refresh()
+      await nextTick()
+      fileTree.value?.reveal(result.path)
+    } else {
+      const result = await api.moveDocument(previous, moveDestination.value.trim())
+      movedPath = result.document.path
+      applyMove(previous, result.document)
+      moveDialog.value!.close()
+      notify(
+        result.warning ??
+          (result.document.path === previous
+            ? '文件位置未改变。'
+            : '已移至 ' + relative(result.document.path) + '。请检查原有链接与相对图片路径。'),
+        !!result.warning,
+      )
+      await refresh()
+    }
   } catch (e) {
     moveError.value = (e as Error).message
   } finally {
@@ -190,6 +240,7 @@ async function moveDocument() {
     if (moveDialog.value?.open && moveError.value) moveInput.value?.focus()
     else if (movedPath && mainDoc.value?.path === movedPath) mainPane.value?.focus()
     else if (movedPath && rightDoc.value?.path === movedPath) rightPane.value?.focus()
+    else if (movedFolderPath) fileTree.value?.reveal(movedFolderPath, true)
   }
 }
 async function flushAll() {
@@ -545,6 +596,7 @@ async function command(name: string) {
 }
 function event(e: AppEvent) {
   if (e.type === 'relocated') applyMove(e.previous, e.document)
+  if (e.type === 'folderRelocated') applyFolderMove(e.previous, e.path)
   if (e.type === 'settings') settings.value = e.settings
   if (e.type === 'navigate') {
     pendingNavigation = { path: e.path, anchor: e.anchor }
@@ -720,6 +772,7 @@ onBeforeUnmount(() => {
           :query="query"
           @open="openDocument"
           @directory="creationFolder = $event"
+          @relocate-directory="showMoveFolder"
         />
         <div v-else class="sidebar-empty">
           打开存放 Markdown 的文件夹，<br />在这里浏览和连接你的笔记。
@@ -1021,10 +1074,12 @@ onBeforeUnmount(() => {
       @close="drainNavigation"
     >
       <form @submit.prevent="moveDocument">
-        <h2 id="move-title">重命名或移动笔记</h2>
+        <h2 id="move-title">
+          {{ moveKind === 'folder' ? '重命名或移动文件夹' : '重命名或移动笔记' }}
+        </h2>
         <p class="muted move-source">{{ moveSource }}</p>
         <label for="move-destination">{{
-          moveInWorkspace ? '新路径（相对工作区）' : '新文件名'
+          moveKind === 'folder' || moveInWorkspace ? '新路径（相对工作区）' : '新文件名'
         }}</label>
         <input
           id="move-destination"
@@ -1037,11 +1092,17 @@ onBeforeUnmount(() => {
           spellcheck="false"
         />
         <p id="move-help" class="muted">
-          {{
-            moveInWorkspace
-              ? '可填 文件夹/笔记.md，目标文件夹需已存在。'
-              : '单文件模式只支持同目录重命名。'
-          }}自动补上 .md，已有文件不会被覆盖。原有链接与相对图片路径不会自动修改。
+          <template v-if="moveKind === 'folder'">
+            可填
+            文件夹/新名称，目标上级文件夹需已存在。已有文件或文件夹不会被覆盖。原有链接与相对图片路径不会自动修改。
+          </template>
+          <template v-else>
+            {{
+              moveInWorkspace
+                ? '可填 文件夹/笔记.md，目标文件夹需已存在。'
+                : '单文件模式只支持同目录重命名。'
+            }}自动补上 .md，已有文件不会被覆盖。原有链接与相对图片路径不会自动修改。
+          </template>
         </p>
         <p id="move-error" class="move-error" role="alert">{{ moveError }}</p>
         <div class="dialog-actions">
