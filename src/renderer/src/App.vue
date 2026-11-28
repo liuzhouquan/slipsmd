@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import type {
   Capture,
   DocumentSnapshot,
@@ -37,6 +37,15 @@ const query = ref('')
 const notice = ref('')
 const noticeKind = ref('info')
 const busy = ref(false)
+const relocating = ref(false)
+const moveDialog = ref<HTMLDialogElement>()
+const moveInput = ref<HTMLInputElement>()
+const moveSource = ref('')
+const moveDestination = ref('')
+const moveError = ref('')
+const moveInWorkspace = computed(
+  () => !!workspace.value && relative(moveSource.value) !== moveSource.value,
+)
 const showSettings = ref(false)
 const showChat = ref(false)
 const showNew = ref(false)
@@ -94,7 +103,7 @@ function notify(message: string, error = false) {
   noticeKind.value = error ? 'error' : 'info'
 }
 async function run(task: () => Promise<void>) {
-  if (busy.value) return
+  if (busy.value || moveDialog.value?.open) return
   busy.value = true
   try {
     await task()
@@ -102,6 +111,70 @@ async function run(task: () => Promise<void>) {
     notify((e as Error).message, true)
   } finally {
     busy.value = false
+  }
+}
+async function showMove(file: string) {
+  if (busy.value || moveDialog.value?.open) return
+  moveSource.value = file
+  moveDestination.value = moveInWorkspace.value ? relative(file) : file.split(/[\\/]/).pop()!
+  moveError.value = ''
+  moveDialog.value!.showModal()
+  await nextTick()
+  moveInput.value!.focus()
+  const value = moveDestination.value
+  moveInput.value!.setSelectionRange(
+    Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\')) + 1,
+    value.lastIndexOf('.'),
+  )
+}
+function applyMove(previous: string, doc: DocumentSnapshot) {
+  if (previous === doc.path) return
+  if (mainDoc.value?.path === previous) mainPane.value?.rememberPosition()
+  if (rightDoc.value?.path === previous) rightPane.value?.rememberPosition()
+  mainPositions.move(previous, doc.path)
+  rightPositions.move(previous, doc.path)
+  dirtyPaths.delete(previous)
+  if (mainDoc.value?.path === previous) {
+    mainDoc.value = doc
+    document.title = basename(doc.path) + ' — SlipsMD'
+  }
+  if (rightDoc.value?.path === previous) rightDoc.value = doc
+  history.value = history.value.map((file) => (file === previous ? doc.path : file))
+}
+async function moveDocument() {
+  if (busy.value) return
+  busy.value = true
+  relocating.value = true
+  moveError.value = ''
+  await nextTick()
+  let movedPath: string | undefined
+  try {
+    if (!(await flushAll())) {
+      moveError.value = '正文尚未保存。请取消并处理保存错误或等待图片处理完成。'
+      return
+    }
+    const previous = moveSource.value
+    const result = await api.moveDocument(previous, moveDestination.value.trim())
+    movedPath = result.document.path
+    applyMove(previous, result.document)
+    moveDialog.value!.close()
+    notify(
+      result.warning ??
+        (result.document.path === previous
+          ? '文件位置未改变。'
+          : '已移至 ' + relative(result.document.path) + '。请检查原有链接与相对图片路径。'),
+      !!result.warning,
+    )
+    await refresh()
+  } catch (e) {
+    moveError.value = (e as Error).message
+  } finally {
+    relocating.value = false
+    busy.value = false
+    await nextTick()
+    if (moveDialog.value?.open && moveError.value) moveInput.value?.focus()
+    else if (movedPath && mainDoc.value?.path === movedPath) mainPane.value?.focus()
+    else if (movedPath && rightDoc.value?.path === movedPath) rightPane.value?.focus()
   }
 }
 async function flushAll() {
@@ -265,8 +338,14 @@ async function refresh() {
   try {
     workspace.value = await api.refreshWorkspace()
     for (const field of [mainDoc, rightDoc]) {
-      if (field.value && !dirtyPaths.has(field.value.path))
-        field.value = await api.readDocument(field.value.path)
+      const file = field.value?.path
+      if (!file || dirtyPaths.has(file)) continue
+      try {
+        const doc = await api.readDocument(file)
+        if (field.value?.path === file && !dirtyPaths.has(file)) field.value = doc
+      } catch (error) {
+        if (field.value?.path === file) throw error
+      }
     }
     await updateLinks()
     if (showChat.value && workspace.value) captures.value = await api.chat()
@@ -327,12 +406,21 @@ async function updateSettings(patch: Partial<Pick<Settings, 'theme' | 'imageMode
   }
 }
 async function command(name: string) {
+  if (moveDialog.value?.open) {
+    if (name === 'close' && !relocating.value) moveDialog.value.close()
+    return
+  }
   if (name === 'close') {
     if (await flushAll()) await api.closeWindow()
     return
   }
   if (name === 'save') {
     await flushAll()
+    return
+  }
+  if (name === 'move-file') {
+    if (mainDoc.value && !mainDoc.value.readOnly) await showMove(mainDoc.value.path)
+    else notify('请在原编辑窗口打开要重命名或移动的笔记。')
     return
   }
   if (name === 'open-file') {
@@ -351,6 +439,7 @@ async function command(name: string) {
   if (name === 'chat') await toggleChat()
 }
 function event(e: AppEvent) {
+  if (e.type === 'relocated') applyMove(e.previous, e.document)
   if (e.type === 'settings') settings.value = e.settings
   if (e.type === 'navigate') void openDocument(e.path)
   if (e.type === 'command') void command(e.command)
@@ -358,6 +447,10 @@ function event(e: AppEvent) {
   if (e.type === 'document' && !dirtyPaths.has(e.document.path)) saved(e.document)
 }
 function shortcut(e: KeyboardEvent) {
+  if (e.key === 'F2') {
+    e.preventDefault()
+    void command('move-file')
+  }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
     document.querySelector<HTMLInputElement>('#file-search')?.focus()
@@ -598,10 +691,12 @@ onBeforeUnmount(() => {
               ref="mainPane"
               :document="mainDoc"
               :positions="mainPositions"
+              :blocked="relocating"
               :files="allFiles"
               @change="changed"
               @saved="saved"
               @link="follow"
+              @relocate="showMove"
             />
             <div class="connections">
               <details :open="linkInfo.backlinks.length > 0 || undefined">
@@ -672,10 +767,12 @@ onBeforeUnmount(() => {
               ref="rightPane"
               :document="rightDoc"
               :positions="rightPositions"
+              :blocked="relocating"
               :files="allFiles"
               @change="changed"
               @saved="saved"
               @link="follow"
+              @relocate="showMove"
             />
           </aside>
         </div>
@@ -775,6 +872,44 @@ onBeforeUnmount(() => {
         Ctrl+点击笔记或内部链接，在独立窗口打开。点击渲染后的图片、公式或表格可编辑源码。
       </p>
     </section>
+    <dialog
+      ref="moveDialog"
+      class="move-note-dialog"
+      aria-labelledby="move-title"
+      @cancel="relocating && $event.preventDefault()"
+    >
+      <form @submit.prevent="moveDocument">
+        <h2 id="move-title">重命名或移动笔记</h2>
+        <p class="muted move-source">{{ moveSource }}</p>
+        <label for="move-destination">{{
+          moveInWorkspace ? '新路径（相对工作区）' : '新文件名'
+        }}</label>
+        <input
+          id="move-destination"
+          ref="moveInput"
+          v-model="moveDestination"
+          :disabled="relocating"
+          :aria-invalid="!!moveError"
+          aria-describedby="move-help move-error"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <p id="move-help" class="muted">
+          {{
+            moveInWorkspace
+              ? '可填 文件夹/笔记.md，目标文件夹需已存在。'
+              : '单文件模式只支持同目录重命名。'
+          }}自动补上 .md，已有文件不会被覆盖。原有链接与相对图片路径不会自动修改。
+        </p>
+        <p id="move-error" class="move-error" role="alert">{{ moveError }}</p>
+        <div class="dialog-actions">
+          <button type="button" :disabled="relocating" @click="moveDialog?.close()">取消</button>
+          <button class="primary" :disabled="!moveDestination.trim() || busy" type="submit">
+            {{ relocating ? '正在移动…' : '保存并移动' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
     <div v-if="showNew" class="dialog-backdrop" @click.self="showNew = false">
       <form class="new-note-dialog" @submit.prevent="createFile">
         <h2>新建笔记</h2>

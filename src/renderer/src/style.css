@@ -524,8 +524,11 @@ button.is-pinned {
   white-space: nowrap;
   max-width: 45%;
 }
-.document-tools > .icon-button {
+.document-actions {
   margin-left: auto;
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
 }
 .save-status {
   font-size: 10px;
@@ -938,6 +941,53 @@ button.is-pinned {
   margin-top: 22px;
 }
 .new-note-dialog > div button {
+  font-size: 12px;
+}
+.move-note-dialog {
+  width: min(460px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 26px;
+}
+.move-note-dialog::backdrop {
+  background: #0005;
+}
+.move-note-dialog h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+.move-note-dialog label {
+  display: block;
+  margin: 23px 0 9px;
+  font-size: 12px;
+}
+.move-note-dialog input {
+  width: 100%;
+  font-size: 13px;
+}
+.move-note-dialog p {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.move-source {
+  overflow-wrap: anywhere;
+}
+.move-error {
+  color: var(--danger);
+  min-height: 1.8em;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}
+.dialog-actions button {
   font-size: 12px;
 }
 @media (max-width: 1050px) {

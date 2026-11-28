@@ -36,6 +36,10 @@ export interface DocumentSnapshot {
   dirty: boolean
   recovered: boolean
 }
+export interface MoveResult {
+  document: DocumentSnapshot
+  warning: string | null
+}
 export interface LinkEntry {
   source: string
   target: string
@@ -64,6 +68,7 @@ export type AppEvent =
   | { type: 'filesystem' }
   | { type: 'document'; document: DocumentSnapshot }
   | { type: 'settings'; settings: Settings }
+  | { type: 'relocated'; previous: string; document: DocumentSnapshot }
   | { type: 'command'; command: string }
 export interface DesktopAPI {
   closeWindow(): Promise<void>
@@ -72,6 +77,7 @@ export interface DesktopAPI {
   openFile(): Promise<string | null>
   refreshWorkspace(): Promise<Workspace | null>
   createFile(name: string): Promise<string>
+  moveDocument(path: string, destination: string): Promise<MoveResult>
   readDocument(path: string): Promise<DocumentSnapshot>
   stageDocument(path: string, text: string, revision: string): Promise<void>
   saveDocument(path: string): Promise<DocumentSnapshot>

@@ -5,6 +5,7 @@ const paths: Record<string, string[]> = {
   file: ['M6 3h8l4 4v14H6z', 'M14 3v5h4'],
   plus: ['M12 5v14', 'M5 12h14'],
   pin: ['M9 3h6l-1 7 4 4H6l4-4z', 'M12 14v8'],
+  rename: ['M4 16l-1 5 5-1L21 7l-4-4z', 'M14 6l4 4'],
   search: ['M21 21l-5-5', 'M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0'],
   window: ['M3 5h18v15H3z', 'M3 9h18', 'M15 2h7v7'],
   save: ['M4 3h14l3 3v15H3V3z', 'M7 3v6h10V3', 'M7 21v-8h10v8'],

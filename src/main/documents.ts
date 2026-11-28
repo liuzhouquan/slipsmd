@@ -25,13 +25,14 @@ export class DocumentStore {
     private changed: (doc: DocumentSnapshot) => void = () => {},
   ) {}
   private async serial<T>(file: string, operation: () => Promise<T>): Promise<T> {
-    const previous = this.queues.get(file) ?? Promise.resolve()
+    const key = process.platform === 'win32' ? file.toLowerCase() : file
+    const previous = this.queues.get(key) ?? Promise.resolve()
     const task = previous.catch(() => {}).then(operation)
-    this.queues.set(file, task)
+    this.queues.set(key, task)
     try {
       return await task
     } finally {
-      if (this.queues.get(file) === task) this.queues.delete(file)
+      if (this.queues.get(key) === task) this.queues.delete(key)
     }
   }
   private draftPath(file: string) {
@@ -181,6 +182,84 @@ export class DocumentStore {
         this.sessions.delete(file)
       }
     })
+  }
+  async relocate(file: string, target: string, owner: number): Promise<DocumentSnapshot> {
+    // All operations use the same queues; sorted acquisition avoids opposite-move deadlocks.
+    const paths = [
+      ...new Set([file, target].map((p) => (process.platform === 'win32' ? p.toLowerCase() : p))),
+    ].sort()
+    const lock = (index: number): Promise<DocumentSnapshot> =>
+      index < paths.length ? this.serial(paths[index], () => lock(index + 1)) : move()
+    const move = async () => {
+      const session = this.owned(file, owner)
+      if (session.dirty) throw new Error('请先保存当前笔记，再重命名或移动。')
+      if (file === target) return this.snapshot(session, owner)
+      if (!/\.(md|markdown)$/i.test(target)) throw new Error('目标必须是 Markdown 文件。')
+      const targetKey = process.platform === 'win32' ? target.toLowerCase() : target
+      if (
+        [...this.sessions.keys()].some(
+          (key) => (process.platform === 'win32' ? key.toLowerCase() : key) === targetKey,
+        )
+      )
+        throw new Error('目标路径已在应用中打开，请选择其他位置。')
+      try {
+        await fs.access(this.draftPath(target))
+        throw new Error('目标路径存在恢复草稿，请先恢复或备份该草稿，再使用此路径。')
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+      const bytes = await this.bytes(file)
+      if (digest(bytes) !== session.revision)
+        throw new Error('文件已被外部程序修改，请先载入磁盘版本或处理冲突。')
+      const before = await fs.lstat(file)
+      if (!before.isFile()) throw new Error('源路径不再是普通文件，请重新打开笔记。')
+      await fs.rm(this.draftPath(file), { force: true })
+      // link is exclusive: unlike rename on POSIX, it cannot overwrite an existing target.
+      // A crash between link and unlink leaves both names pointing at the original bytes.
+      try {
+        await fs.link(file, target)
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code === 'EEXIST') throw new Error('目标已存在，未覆盖任何文件。请使用其他名称。')
+        if (['EXDEV', 'ENOTSUP', 'EOPNOTSUPP'].includes(code ?? ''))
+          throw new Error(
+            '此位置不支持安全移动；请使用同一磁盘内的文件夹，或在系统文件管理器中操作。',
+          )
+        if (['EPERM', 'EACCES'].includes(code ?? ''))
+          throw new Error('无法在这两个位置安全移动，请检查写入权限或改用系统文件管理器。')
+        throw error
+      }
+      try {
+        const current = await fs.lstat(file)
+        if (
+          current.dev !== before.dev ||
+          current.ino !== before.ino ||
+          digest(await this.bytes(file)) !== session.revision ||
+          digest(await this.bytes(target)) !== session.revision
+        )
+          throw new Error('移动期间文件被外部程序修改，操作已中止。')
+        await fs.unlink(file)
+      } catch (error) {
+        try {
+          const linked = await fs.lstat(target)
+          if (
+            linked.dev !== before.dev ||
+            linked.ino !== before.ino ||
+            digest(await this.bytes(target)) !== session.revision
+          )
+            throw new Error('Target changed')
+          await fs.unlink(target)
+        } catch {
+          throw new Error('移动未完成，路径状态已改变。请检查源路径和目标路径后再操作。')
+        }
+        throw error
+      }
+      this.sessions.delete(file)
+      session.path = target
+      this.sessions.set(target, session)
+      return this.snapshot(session, owner)
+    }
+    return lock(0)
   }
   async reload(file: string, owner: number) {
     return this.serial(file, async () => {

@@ -24,6 +24,11 @@ export class ReadingPositions {
     this.entries.set(path, position)
     if (this.entries.size > 100) this.entries.delete(this.entries.keys().next().value!)
   }
+  move(previous: string, target: string) {
+    const position = this.entries.get(previous)
+    this.entries.delete(previous)
+    if (position) this.set(target, position)
+  }
 }
 
 export function selectionAt(position: ReadingPosition | undefined, length: number) {
@@ -76,6 +81,7 @@ export function trackReadingPosition(
     container.addEventListener(event, stopRestoring, { passive: true })
   restore()
   return () => {
+    if (disposed) return
     if (restoring && saved) positions.set(path, saved)
     else {
       const height = visibleTop() - view.documentTop

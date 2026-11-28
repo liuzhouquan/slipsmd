@@ -9,6 +9,7 @@ import { DocumentStore, digest } from './documents'
 import { extractLinks, isInside, resolveNote } from './links'
 import { importLegacyProfiles } from './migration'
 import { addPin, createPin, normalizePins, resolvePin } from './pins'
+import { moveTarget } from './relocation'
 import { captureMarker, hasCaptureSource, parseCaptures } from '../shared/captures'
 import type { AppEvent, FileNode, Settings, Workspace } from '../shared/types'
 
@@ -332,6 +333,47 @@ function registerHandlers() {
     state.allowed.add(file)
     return store.open(file, state.win.webContents.id)
   })
+  handle('moveDocument', async (state, candidate, destination) => {
+    const file = await grant(state, candidate)
+    if (
+      [...states.values()].some(
+        (s) => s.root && path.relative(path.join(s.root, 'Chat.md'), file) === '',
+      )
+    )
+      throw new Error('Chat.md 是工作区收集箱，请保留它的名称和位置。')
+    const target = await moveTarget(file, state.root, destination)
+    const document = await store.relocate(file, target, state.win.webContents.id)
+    if (file === target) return { document, warning: null }
+    for (const current of states.values()) {
+      if (current.allowed.delete(file)) current.allowed.add(target)
+      if (current.initial === file) current.initial = target
+      send(current, {
+        type: 'relocated',
+        previous: file,
+        document: {
+          ...document,
+          readOnly: current.win.webContents.id !== state.win.webContents.id,
+        },
+      })
+    }
+    settings.pins = normalizePins(
+      settings.pins.map((pin) =>
+        pin.kind === 'file' && pin.path === file
+          ? { ...pin, path: target, name: path.basename(target) }
+          : pin,
+      ),
+    )
+    broadcast({ type: 'settings', settings })
+    let warning: string | null = null
+    try {
+      await persistSettings()
+    } catch (error) {
+      console.error('Move settings:', error)
+      warning = '笔记已移动，但快捷方式设置保存失败；请重新固定该笔记。'
+    }
+    broadcast({ type: 'filesystem' })
+    return { document, warning }
+  })
   handle('stageDocument', async (state, candidate, text, revision) => {
     assertText(text, 20 * 1024 * 1024)
     assertText(revision, 100)
@@ -600,6 +642,7 @@ if (hasInstanceLock)
               },
               { type: 'separator' },
               { label: '保存', accelerator: 'CmdOrCtrl+S', click: () => command('save') },
+              { label: '重命名或移动笔记…', accelerator: 'F2', click: () => command('move-file') },
               { label: '关闭窗口', role: 'close' },
               { role: 'quit', label: '退出' },
             ],

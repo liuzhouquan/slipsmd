@@ -29,11 +29,13 @@ const props = defineProps<{
   document: DocumentSnapshot
   files?: string[]
   positions: ReadingPositions
+  blocked?: boolean
 }>()
 const emit = defineEmits<{
   saved: [doc: DocumentSnapshot]
   change: [path: string, dirty: boolean]
   link: [path: string, href: string, newWindow: boolean]
+  relocate: [path: string]
 }>()
 const host = ref<HTMLElement>()
 const error = ref('')
@@ -137,7 +139,7 @@ function apply(doc: DocumentSnapshot) {
   emit('change', doc.path, doc.dirty)
 }
 function wrap(before: string, after = before) {
-  if (props.document.readOnly) return false
+  if (props.document.readOnly || props.blocked) return false
   const range = view.state.selection.main
   const selected = view.state.sliceDoc(range.from, range.to)
   view.dispatch({
@@ -192,7 +194,7 @@ function toggleSource() {
 }
 async function pasteImage(event: ClipboardEvent) {
   const item = [...(event.clipboardData?.items ?? [])].find((i) => i.type.startsWith('image/'))
-  if (!item || props.document.readOnly) return
+  if (!item || props.document.readOnly || props.blocked) return
   event.preventDefault()
   const file = item.getAsFile()
   if (!file) return
@@ -265,8 +267,8 @@ onMounted(() => {
         Prec.highest(keymap.of(completionKeymap)),
         EditorView.lineWrapping,
         access.of([
-          EditorState.readOnly.of(props.document.readOnly),
-          EditorView.editable.of(!props.document.readOnly),
+          EditorState.readOnly.of(props.document.readOnly || props.blocked),
+          EditorView.editable.of(!props.document.readOnly && !props.blocked),
         ]),
         EditorView.contentAttributes.of({ 'aria-label': 'Markdown 编辑器', spellcheck: 'false' }),
         keymap.of([
@@ -330,7 +332,7 @@ watch(
   },
 )
 watch(
-  () => props.document.readOnly,
+  () => props.document.readOnly || !!props.blocked,
   (readOnly) => {
     view?.dispatch({
       effects: access.reconfigure([
@@ -357,6 +359,7 @@ defineExpose({
   },
   focus: () => view?.focus(),
   getText: text,
+  rememberPosition: () => rememberPosition?.(),
 })
 </script>
 <template>
@@ -366,15 +369,25 @@ defineExpose({
         v-if="document.readOnly"
         class="muted"
         >另一个窗口正在编辑 · 只读</span
-      ><span v-else class="save-status" aria-live="polite">{{ dirty ? '未保存' : status }}</span
-      ><button
-        class="icon-button"
-        :title="preview ? '切换源码模式' : '切换实时预览'"
-        :aria-label="preview ? '切换源码模式' : '切换实时预览'"
-        @click="toggleSource"
-      >
-        <Icon :name="preview ? 'code' : 'eye'" />
-      </button>
+      ><span v-else class="save-status" aria-live="polite">{{ dirty ? '未保存' : status }}</span>
+      <div class="document-actions">
+        <button
+          class="icon-button"
+          aria-label="重命名或移动笔记"
+          :title="document.readOnly ? '请回原编辑窗口重命名或移动' : '重命名或移动笔记'"
+          :disabled="document.readOnly || blocked"
+          @click="emit('relocate', document.path)"
+        >
+          <Icon name="rename" :size="16" /></button
+        ><button
+          class="icon-button"
+          :title="preview ? '切换源码模式' : '切换实时预览'"
+          :aria-label="preview ? '切换源码模式' : '切换实时预览'"
+          @click="toggleSource"
+        >
+          <Icon :name="preview ? 'code' : 'eye'" />
+        </button>
+      </div>
     </div>
     <div v-if="error" class="error-banner" role="alert">
       <span>{{ error }}</span><button @click="copy">另存副本</button
