@@ -14,6 +14,7 @@ const api: DesktopAPI = {
   openFile: () => invoke('openFile'),
   refreshWorkspace: () => invoke('refreshWorkspace'),
   createFile: (name) => invoke('createFile', name),
+  createFolder: (path) => invoke('createFolder', path),
   moveDocument: (path, destination) => invoke('moveDocument', path, destination),
   readDocument: (path) => invoke('readDocument', path),
   stageDocument: (path, text, revision) => invoke('stageDocument', path, text, revision),

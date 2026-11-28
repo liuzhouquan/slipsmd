@@ -10,6 +10,8 @@ import { extractLinks, isInside, resolveNote } from './links'
 import { importLegacyProfiles } from './migration'
 import { addPin, createPin, normalizePins, resolvePin } from './pins'
 import { moveTarget } from './relocation'
+import { createDirectory, newNoteTarget } from './workspace-files'
+import { excludedDirectories as excluded } from './workspace-paths'
 import { captureMarker, hasCaptureSource, parseCaptures } from '../shared/captures'
 import type { AppEvent, FileNode, Settings, Workspace } from '../shared/types'
 
@@ -45,7 +47,6 @@ const broadcast = (event: AppEvent) => {
   for (const state of states.values()) send(state, event)
 }
 const filters = [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
-const excluded = new Set(['.git', 'node_modules', '.obsidian', '.slipsmd', 'dist'])
 function assertText(value: unknown, limit = 32768): asserts value is string {
   if (typeof value !== 'string' || value.length > limit || value.includes('\0'))
     throw new Error('参数无效。')
@@ -313,20 +314,16 @@ function registerHandlers() {
     return { workspace: null, document: target }
   })
   handle('createFile', async (state, name) => {
-    assertText(name, 200)
     if (!state.root) throw new Error('请先打开文件夹。')
-    if (
-      !name.trim() ||
-      /[<>:"/\\|?*\x00-\x1f]/.test(name) ||
-      /[. ]$/.test(name) ||
-      /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(name)
-    )
-      throw new Error('文件名包含 Windows 不支持的字符或保留名称。')
-    const file = path.join(state.root, /\.(md|markdown)$/i.test(name) ? name : name + '.md')
-    await fs.writeFile(file, '# ' + path.basename(file).replace(/\.(md|markdown)$/i, '') + '\n\n', {
-      flag: 'wx',
-    })
+    const file = await store.create(await newNoteTarget(state.root, name))
+    broadcast({ type: 'filesystem' })
     return file
+  })
+  handle('createFolder', async (state, destination) => {
+    if (!state.root) throw new Error('请先打开文件夹。')
+    const folder = await createDirectory(state.root, destination)
+    broadcast({ type: 'filesystem' })
+    return folder
   })
   handle('readDocument', async (state, candidate) => {
     const file = await grant(state, candidate)
@@ -635,6 +632,7 @@ if (hasInstanceLock)
                 click: () => command('open-folder'),
               },
               { label: '新建笔记', accelerator: 'CmdOrCtrl+N', click: () => command('new-file') },
+              { label: '新建文件夹…', click: () => command('new-folder') },
               {
                 label: '新建窗口',
                 accelerator: 'CmdOrCtrl+Shift+N',

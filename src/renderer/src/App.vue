@@ -24,6 +24,8 @@ const mainDoc = ref<DocumentSnapshot | null>(null)
 const rightDoc = ref<DocumentSnapshot | null>(null)
 const mainPane = ref<Pane>()
 const rightPane = ref<Pane>()
+const fileTree = ref<InstanceType<typeof FileTree>>()
+const creationFolder = ref<string | null>(null)
 const settings = ref<Settings>({
   theme: 'light',
   imageMode: 'local',
@@ -48,7 +50,11 @@ const moveInWorkspace = computed(
 )
 const showSettings = ref(false)
 const showChat = ref(false)
-const showNew = ref(false)
+const createDialog = ref<HTMLDialogElement>()
+const createInput = ref<HTMLInputElement>()
+const createKind = ref<'file' | 'folder'>('file')
+const creating = ref(false)
+const createError = ref('')
 const newName = ref('')
 const chatText = ref('')
 const captures = ref<Capture[]>([])
@@ -103,7 +109,7 @@ function notify(message: string, error = false) {
   noticeKind.value = error ? 'error' : 'info'
 }
 async function run(task: () => Promise<void>) {
-  if (busy.value || moveDialog.value?.open) return
+  if (busy.value || moveDialog.value?.open || createDialog.value?.open) return
   busy.value = true
   try {
     await task()
@@ -114,7 +120,7 @@ async function run(task: () => Promise<void>) {
   }
 }
 async function showMove(file: string) {
-  if (busy.value || moveDialog.value?.open) return
+  if (busy.value || moveDialog.value?.open || createDialog.value?.open) return
   moveSource.value = file
   moveDestination.value = moveInWorkspace.value ? relative(file) : file.split(/[\\/]/).pop()!
   moveError.value = ''
@@ -135,6 +141,7 @@ function applyMove(previous: string, doc: DocumentSnapshot) {
   rightPositions.move(previous, doc.path)
   dirtyPaths.delete(previous)
   if (mainDoc.value?.path === previous) {
+    creationFolder.value = null
     mainDoc.value = doc
     document.title = basename(doc.path) + ' — SlipsMD'
   }
@@ -197,6 +204,7 @@ async function openDocument(file: string, newWindow = false) {
   })
 }
 async function openMainInternal(file: string) {
+  creationFolder.value = null
   if (mainDoc.value?.path === file) {
     mainPane.value?.focus()
     return
@@ -207,6 +215,8 @@ async function openMainInternal(file: string) {
   if (previous) await api.releaseDocument(previous.path)
   mainDoc.value = doc
   document.title = basename(doc.path) + ' — SlipsMD'
+  await nextTick()
+  fileTree.value?.reveal(doc.path)
   await updateLinks()
 }
 async function openRight(file: string, record = true) {
@@ -271,6 +281,7 @@ async function applyWorkspace(next: Workspace | null) {
   if (mainDoc.value) await api.releaseDocument(mainDoc.value.path)
   await closeRightInternal()
   mainDoc.value = null
+  creationFolder.value = null
   workspace.value = next
   linkInfo.value = { outgoing: [], backlinks: [] }
   showChat.value = false
@@ -315,18 +326,65 @@ async function openFile() {
     notify((e as Error).message, true)
   }
 }
-async function createFile() {
-  await run(async () => {
-    if (!(await flushAll())) return
-    const file = await api.createFile(newName.value.trim())
-    if (mainDoc.value) await api.releaseDocument(mainDoc.value.path)
-    await closeRightInternal()
-    mainDoc.value = await api.readDocument(file)
+async function showCreate(kind: 'file' | 'folder') {
+  if (busy.value || moveDialog.value?.open || createDialog.value?.open) return
+  if (!workspace.value) {
+    notify('请先打开文件夹。')
+    return
+  }
+  createKind.value = kind
+  createError.value = ''
+  let prefix = ''
+  if (creationFolder.value) {
+    const folder = relative(creationFolder.value)
+    if (creationFolder.value !== workspace.value.root && folder !== creationFolder.value)
+      prefix = folder.replace(/\\/g, '/') + '/'
+  } else if (mainDoc.value && relative(mainDoc.value.path) !== mainDoc.value.path) {
+    const file = relative(mainDoc.value.path).replace(/\\/g, '/')
+    prefix = file.slice(0, file.lastIndexOf('/') + 1)
+  }
+  newName.value = prefix
+  createDialog.value!.showModal()
+  await nextTick()
+  createInput.value!.focus()
+  createInput.value!.setSelectionRange(prefix.length, prefix.length)
+}
+async function createEntry() {
+  if (busy.value) return
+  busy.value = true
+  creating.value = true
+  createError.value = ''
+  await nextTick()
+  let created: string | undefined
+  const kind = createKind.value
+  try {
+    if (kind === 'file' && !(await flushAll())) {
+      createError.value = '当前正文尚未保存，请先处理保存错误或等待图片处理完成。'
+      return
+    }
+    created =
+      kind === 'file'
+        ? await api.createFile(newName.value.trim())
+        : await api.createFolder(newName.value.trim())
+    createDialog.value!.close()
+    query.value = ''
     workspace.value = await api.refreshWorkspace()
-    showNew.value = false
-    newName.value = ''
-    await updateLinks()
-  })
+    if (kind === 'file') await openMainInternal(created)
+    else creationFolder.value = created
+    await nextTick()
+    fileTree.value?.reveal(created, kind === 'folder')
+    notify('已创建' + (kind === 'file' ? '笔记：' : '文件夹：') + relative(created))
+  } catch (e) {
+    if (created)
+      notify('已创建 ' + relative(created) + '，但刷新或打开失败：' + (e as Error).message, true)
+    else createError.value = (e as Error).message
+  } finally {
+    creating.value = false
+    busy.value = false
+    await nextTick()
+    if (createDialog.value?.open && createError.value) createInput.value?.focus()
+    else if (created && kind === 'file' && mainDoc.value?.path === created) mainPane.value?.focus()
+  }
 }
 async function updateLinks() {
   if (!mainDoc.value) return
@@ -406,6 +464,10 @@ async function updateSettings(patch: Partial<Pick<Settings, 'theme' | 'imageMode
   }
 }
 async function command(name: string) {
+  if (createDialog.value?.open) {
+    if (name === 'close' && !creating.value) createDialog.value.close()
+    return
+  }
   if (moveDialog.value?.open) {
     if (name === 'close' && !relocating.value) moveDialog.value.close()
     return
@@ -432,8 +494,11 @@ async function command(name: string) {
     return
   }
   if (name === 'new-file') {
-    if (!workspace.value) notify('请先打开文件夹。')
-    else showNew.value = true
+    await showCreate('file')
+    return
+  }
+  if (name === 'new-folder') {
+    await showCreate('folder')
     return
   }
   if (name === 'chat') await toggleChat()
@@ -458,7 +523,6 @@ function shortcut(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (pinMenu.value) pinMenu.value.open = false
     showSettings.value = false
-    showNew.value = false
   }
 }
 onMounted(async () => {
@@ -559,7 +623,16 @@ onBeforeUnmount(() => {
         <p v-else class="pins-empty">固定常用文件或文件夹，随时打开。</p>
       </section>
       <div class="workspace-heading">
-        <span>{{ workspace?.name || '文件工作区' }}</span>
+        <span :title="workspace?.root">{{ workspace?.name || '文件工作区' }}</span>
+        <button
+          class="icon-button"
+          aria-label="新建文件夹"
+          title="新建文件夹"
+          :disabled="!workspace || busy"
+          @click="showCreate('folder')"
+        >
+          <Icon name="folder-plus" :size="15" />
+        </button>
         <button
           v-if="workspace"
           class="icon-button"
@@ -578,10 +651,12 @@ onBeforeUnmount(() => {
       <div class="tree-scroll">
         <FileTree
           v-if="workspace"
+          ref="fileTree"
           :nodes="workspace.tree"
           :selected="mainDoc?.path || null"
           :query="query"
           @open="openDocument"
+          @directory="creationFolder = $event"
         />
         <div v-else class="sidebar-empty">
           打开存放 Markdown 的文件夹，<br />在这里浏览和连接你的笔记。
@@ -691,7 +766,7 @@ onBeforeUnmount(() => {
               ref="mainPane"
               :document="mainDoc"
               :positions="mainPositions"
-              :blocked="relocating"
+              :blocked="relocating || (creating && createKind === 'file')"
               :files="allFiles"
               @change="changed"
               @saved="saved"
@@ -767,7 +842,7 @@ onBeforeUnmount(() => {
               ref="rightPane"
               :document="rightDoc"
               :positions="rightPositions"
-              :blocked="relocating"
+              :blocked="relocating || (creating && createKind === 'file')"
               :files="allFiles"
               @change="changed"
               @saved="saved"
@@ -910,22 +985,42 @@ onBeforeUnmount(() => {
         </div>
       </form>
     </dialog>
-    <div v-if="showNew" class="dialog-backdrop" @click.self="showNew = false">
-      <form class="new-note-dialog" @submit.prevent="createFile">
-        <h2>新建笔记</h2>
-        <label
-          >文件名<input
-            v-model="newName"
-            autofocus
-            placeholder="例如：今天的思考"
-            aria-label="新笔记文件名"
-        /></label>
-        <p class="muted">保存到当前工作区，自动补上 .md。</p>
-        <div>
-          <button type="button" @click="showNew = false">取消</button
-          ><button class="primary" :disabled="!newName.trim() || busy">创建</button>
+    <dialog
+      ref="createDialog"
+      class="move-note-dialog"
+      aria-labelledby="create-title"
+      @cancel="creating && $event.preventDefault()"
+    >
+      <form @submit.prevent="createEntry">
+        <h2 id="create-title">{{ createKind === 'file' ? '新建笔记' : '新建文件夹' }}</h2>
+        <p class="muted move-source">{{ workspace?.root }}</p>
+        <label for="create-destination">路径（相对工作区）</label>
+        <input
+          id="create-destination"
+          ref="createInput"
+          v-model="newName"
+          :placeholder="createKind === 'file' ? '例如：写作/今天的思考' : '例如：写作/草稿'"
+          :disabled="creating"
+          :aria-invalid="!!createError"
+          aria-describedby="create-help create-error"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <p id="create-help" class="muted">
+          父文件夹需已存在，已有项目不会被覆盖。{{
+            createKind === 'file'
+              ? '笔记自动补上 .md，创建前先保存当前正文。'
+              : '新建文件夹不会切换当前笔记。'
+          }}
+        </p>
+        <p id="create-error" class="move-error" role="alert">{{ createError }}</p>
+        <div class="dialog-actions">
+          <button type="button" :disabled="creating" @click="createDialog?.close()">取消</button>
+          <button class="primary" :disabled="!newName.trim() || busy" type="submit">
+            {{ creating ? '正在创建…' : '创建' }}
+          </button>
         </div>
       </form>
-    </div>
+    </dialog>
   </div>
 </template>

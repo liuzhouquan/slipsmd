@@ -1,6 +1,6 @@
 {
   "name": "slipsmd",
-  "version": "0.1.0-alpha.6",
+  "version": "0.1.0-alpha.7",
   "description": "A quiet Markdown workspace. Capture first, connect later.",
   "private": true,
   "license": "MIT",

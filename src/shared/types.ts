@@ -77,6 +77,7 @@ export interface DesktopAPI {
   openFile(): Promise<string | null>
   refreshWorkspace(): Promise<Workspace | null>
   createFile(name: string): Promise<string>
+  createFolder(path: string): Promise<string>
   moveDocument(path: string, destination: string): Promise<MoveResult>
   readDocument(path: string): Promise<DocumentSnapshot>
   stageDocument(path: string, text: string, revision: string): Promise<void>

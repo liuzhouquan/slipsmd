@@ -337,6 +337,15 @@ button.is-pinned {
   font-size: 12px;
   cursor: pointer;
 }
+.file-tree summary > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.file-tree summary > svg {
+  flex-shrink: 0;
+}
 .file-tree summary::-webkit-details-marker {
   display: none;
 }
@@ -912,36 +921,6 @@ button.is-pinned {
   margin-top: 26px;
   padding-top: 16px;
   border-top: 1px solid var(--line);
-}
-.dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  background: #0005;
-  display: grid;
-  place-items: center;
-  z-index: 50;
-}
-.new-note-dialog {
-  width: 380px;
-  background: var(--bg);
-  border-radius: 10px;
-  padding: 26px;
-}
-.new-note-dialog label {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 25px;
-  font-size: 12px;
-}
-.new-note-dialog > div {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 22px;
-}
-.new-note-dialog > div button {
-  font-size: 12px;
 }
 .move-note-dialog {
   width: min(460px, calc(100vw - 40px));

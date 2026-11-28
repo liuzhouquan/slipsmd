@@ -54,6 +54,39 @@ export class DocumentStore {
       throw new Error('此文件已在另一个窗口编辑，请回到原窗口。')
     return session
   }
+  private async assertVacant(file: string) {
+    const key = process.platform === 'win32' ? file.toLowerCase() : file
+    if (
+      [...this.sessions.keys()].some(
+        (p) => (process.platform === 'win32' ? p.toLowerCase() : p) === key,
+      )
+    )
+      throw new Error('目标路径已在应用中打开，请选择其他位置。')
+    try {
+      await fs.access(this.draftPath(file))
+      throw new Error('目标路径存在恢复草稿，请先恢复或备份该草稿，再使用此路径。')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+  async create(file: string) {
+    return this.serial(file, async () => {
+      if (!/\.(md|markdown)$/i.test(file)) throw new Error('请选择 Markdown 文件名。')
+      await this.assertVacant(file)
+      try {
+        await fs.writeFile(
+          file,
+          '# ' + path.basename(file).replace(/\.(md|markdown)$/i, '') + '\n\n',
+          { flag: 'wx' },
+        )
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST')
+          throw new Error('此位置已存在文件或文件夹，请使用其他名称。')
+        throw error
+      }
+      return file
+    })
+  }
   private async bytes(file: string) {
     const stat = await fs.stat(file)
     if (stat.size > MAX_BYTES) throw new Error('首版支持最大 20 MB 的 Markdown 文件。')
@@ -195,19 +228,7 @@ export class DocumentStore {
       if (session.dirty) throw new Error('请先保存当前笔记，再重命名或移动。')
       if (file === target) return this.snapshot(session, owner)
       if (!/\.(md|markdown)$/i.test(target)) throw new Error('目标必须是 Markdown 文件。')
-      const targetKey = process.platform === 'win32' ? target.toLowerCase() : target
-      if (
-        [...this.sessions.keys()].some(
-          (key) => (process.platform === 'win32' ? key.toLowerCase() : key) === targetKey,
-        )
-      )
-        throw new Error('目标路径已在应用中打开，请选择其他位置。')
-      try {
-        await fs.access(this.draftPath(target))
-        throw new Error('目标路径存在恢复草稿，请先恢复或备份该草稿，再使用此路径。')
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-      }
+      await this.assertVacant(target)
       const bytes = await this.bytes(file)
       if (digest(bytes) !== session.revision)
         throw new Error('文件已被外部程序修改，请先载入磁盘版本或处理冲突。')

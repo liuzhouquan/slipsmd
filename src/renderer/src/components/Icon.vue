@@ -2,6 +2,7 @@
 defineProps<{ name: string; size?: number }>()
 const paths: Record<string, string[]> = {
   folder: ['M3 7h6l2-3h10v16H3z'],
+  'folder-plus': ['M3 7h6l2-3h10v16H3z', 'M12 10v7', 'M8.5 13.5h7'],
   file: ['M6 3h8l4 4v14H6z', 'M14 3v5h4'],
   plus: ['M12 5v14', 'M5 12h14'],
   pin: ['M9 3h6l-1 7 4 4H6l4-4z', 'M12 14v8'],
