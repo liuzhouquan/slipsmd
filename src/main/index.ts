@@ -7,6 +7,7 @@ import { watch, type FSWatcher } from 'chokidar'
 import writeFileAtomic from 'write-file-atomic'
 import { DocumentStore, digest } from './documents'
 import { extractLinks, isInside, resolveNote } from './links'
+import { LinkIndex } from './link-index'
 import { importLegacyProfiles } from './migration'
 import { addPin, createPin, normalizePins, resolvePin } from './pins'
 import { moveTarget } from './relocation'
@@ -31,6 +32,30 @@ interface WindowState {
   watcher?: FSWatcher
 }
 const states = new Map<number, WindowState>()
+const indexes = new Map<string, LinkIndex>()
+const rootKey = (root: string) => (process.platform === 'win32' ? root.toLowerCase() : root)
+function indexFor(root: string) {
+  const id = rootKey(root)
+  let index = indexes.get(id)
+  if (!index) {
+    index = new LinkIndex(
+      root,
+      async () => flatten(await tree(root)),
+      (file) => store.getText(file),
+    )
+    indexes.set(id, index)
+  }
+  return index
+}
+function releaseIndexes() {
+  const roots = new Set(
+    [...states.values()].flatMap((state) => (state.root ? [rootKey(state.root)] : [])),
+  )
+  for (const root of indexes.keys()) if (!roots.has(root)) indexes.delete(root)
+}
+function invalidateLinks(file: string) {
+  for (const [root, index] of indexes) if (isInside(root, rootKey(file))) index.invalidate(file)
+}
 let store: DocumentStore
 let settings: Settings = {
   theme: 'light',
@@ -120,6 +145,7 @@ async function setWorkspace(state: WindowState, root: string) {
   if (!stat.isDirectory()) throw new Error('请选择文件夹。')
   await state.watcher?.close()
   state.root = canonical
+  releaseIndexes()
   let timer: ReturnType<typeof setTimeout>
   state.watcher = watch(canonical, {
     ignoreInitial: true,
@@ -131,7 +157,8 @@ async function setWorkspace(state: WindowState, root: string) {
         .split(path.sep)
         .some((part) => part.startsWith('.') || excluded.has(part)),
   })
-  state.watcher.on('all', () => {
+  state.watcher.on('all', (_event, file) => {
+    if (_event.endsWith('Dir') || /\.(md|markdown)$/i.test(file)) invalidateLinks(file)
     clearTimeout(timer)
     timer = setTimeout(() => send(state, { type: 'filesystem' }), 300)
   })
@@ -195,9 +222,12 @@ async function openWindow(file?: string, root?: string | null, anchor?: string) 
     win.close()
   })
   win.on('closed', () => {
+    const released = store.ownedPaths(windowId)
     store.abandon(windowId)
+    for (const file of released) invalidateLinks(file)
     void state.watcher?.close()
     states.delete(windowId)
+    releaseIndexes()
     broadcast({ type: 'filesystem' })
   })
   if (process.env.ELECTRON_RENDERER_URL) await win.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -319,19 +349,24 @@ function registerHandlers() {
   handle('createFile', async (state, name) => {
     if (!state.root) throw new Error('请先打开文件夹。')
     const file = await store.create(await newNoteTarget(state.root, name))
+    invalidateLinks(file)
     broadcast({ type: 'filesystem' })
     return file
   })
   handle('createFolder', async (state, destination) => {
     if (!state.root) throw new Error('请先打开文件夹。')
     const folder = await createDirectory(state.root, destination)
+    invalidateLinks(folder)
     broadcast({ type: 'filesystem' })
     return folder
   })
   handle('readDocument', async (state, candidate) => {
     const file = await grant(state, candidate)
     state.allowed.add(file)
-    return store.open(file, state.win.webContents.id)
+    const previous = store.getText(file)
+    const document = await store.open(file, state.win.webContents.id)
+    if (previous !== document.text) invalidateLinks(file)
+    return document
   })
   handle('moveDocument', async (state, candidate, destination) => {
     const file = await grant(state, candidate)
@@ -344,6 +379,8 @@ function registerHandlers() {
     const target = await moveTarget(file, state.root, destination)
     const document = await store.relocate(file, target, state.win.webContents.id)
     if (file === target) return { document, warning: null }
+    invalidateLinks(file)
+    invalidateLinks(target)
     for (const current of states.values()) {
       if (current.allowed.delete(file)) current.allowed.add(target)
       if (current.initial === file) current.initial = target
@@ -377,22 +414,27 @@ function registerHandlers() {
   handle('stageDocument', async (state, candidate, text, revision) => {
     assertText(text, 20 * 1024 * 1024)
     assertText(revision, 100)
-    return store.stage(
-      await grant(state, candidate, true),
-      text,
-      state.win.webContents.id,
-      revision,
-    )
+    const file = await grant(state, candidate, true)
+    try {
+      return await store.stage(file, text, state.win.webContents.id, revision)
+    } finally {
+      invalidateLinks(file)
+    }
   })
   handle('saveDocument', async (state, candidate) =>
     store.save(await grant(state, candidate, true), state.win.webContents.id),
   )
-  handle('releaseDocument', async (state, candidate) =>
-    store.release(await grant(state, candidate, true), state.win.webContents.id),
-  )
-  handle('reloadDocument', async (state, candidate) =>
-    store.reload(await grant(state, candidate), state.win.webContents.id),
-  )
+  handle('releaseDocument', async (state, candidate) => {
+    const file = await grant(state, candidate, true)
+    await store.release(file, state.win.webContents.id)
+    invalidateLinks(file)
+  })
+  handle('reloadDocument', async (state, candidate) => {
+    const file = await grant(state, candidate)
+    const document = await store.reload(file, state.win.webContents.id)
+    invalidateLinks(file)
+    return document
+  })
   handle('saveCopy', async (state, candidate) => {
     const file = await grant(state, candidate, true)
     const text = store.getText(file)
@@ -404,6 +446,7 @@ function registerHandlers() {
     if (result.canceled || !result.filePath) return null
     if (path.resolve(result.filePath) === file) throw new Error('副本必须使用不同的文件名。')
     await fs.writeFile(result.filePath, text, { flag: 'wx' })
+    invalidateLinks(path.resolve(result.filePath))
     state.allowed.add(await fs.realpath(result.filePath))
     return result.filePath
   })
@@ -427,22 +470,8 @@ function registerHandlers() {
     const file = await grant(state, candidate)
     if (state.root && !isInside(state.root, file)) return { outgoing: [], backlinks: [] }
     const root = state.root ?? path.dirname(file)
-    const paths = state.root ? flatten(await tree(root)) : [file]
-    const links = (
-      await Promise.all(
-        paths.map(async (source) => {
-          try {
-            return extractLinks(
-              source,
-              store.getText(source) ?? (await fs.readFile(source, 'utf8')),
-              root,
-            )
-          } catch {
-            return []
-          }
-        }),
-      )
-    ).flat()
+    if (state.root) return indexFor(root).query(file)
+    const links = extractLinks(file, store.getText(file) ?? (await fs.readFile(file, 'utf8')), root)
     return {
       outgoing: links.filter((l) => l.source === file),
       backlinks: links.filter((l) => l.target === file),
@@ -457,6 +486,7 @@ function registerHandlers() {
       file,
       `${captureMarker('capture', randomUUID(), new Date().toISOString())}\n${text.trim()}`,
     )
+    invalidateLinks(file)
     broadcast({ type: 'filesystem' })
     return readCaptures(state)
   })
@@ -469,8 +499,13 @@ function registerHandlers() {
     if (!entry) throw new Error('这条记录已经整理或不存在。')
     const marker = captureMarker('from', entry.id)
     const body = store.getText(file) ?? (await fs.readFile(file, 'utf8'))
-    if (!hasCaptureSource(body, entry.id)) await store.append(file, `${marker}\n${entry.text}`)
-    await store.append(source, captureMarker('archived', entry.id))
+    try {
+      if (!hasCaptureSource(body, entry.id)) await store.append(file, `${marker}\n${entry.text}`)
+      await store.append(source, captureMarker('archived', entry.id))
+    } finally {
+      invalidateLinks(file)
+      invalidateLinks(source)
+    }
     broadcast({ type: 'filesystem' })
     return readCaptures(state)
   })
@@ -623,9 +658,10 @@ if (hasInstanceLock)
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.error('Settings:', error)
       }
-      store = new DocumentStore(path.join(app.getPath('userData'), 'drafts'), (document) =>
-        broadcast({ type: 'document', document }),
-      )
+      store = new DocumentStore(path.join(app.getPath('userData'), 'drafts'), (document) => {
+        invalidateLinks(document.path)
+        broadcast({ type: 'document', document })
+      })
       registerHandlers()
       Menu.setApplicationMenu(
         Menu.buildFromTemplate([

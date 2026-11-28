@@ -1,6 +1,6 @@
 {
   "name": "slipsmd",
-  "version": "0.1.0-alpha.8",
+  "version": "0.1.0-alpha.9",
   "description": "A quiet Markdown workspace. Capture first, connect later.",
   "private": true,
   "license": "MIT",
@@ -16,6 +16,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "test:desktop": "node scripts/desktop.mjs",
+    "benchmark:index": "node scripts/benchmark-index.mjs",
     "preview": "electron-vite preview",
     "pack:win": "npm run build && electron-builder --win --x64 --publish never",
     "pack:linux": "npm run build && electron-builder --linux --publish never",
