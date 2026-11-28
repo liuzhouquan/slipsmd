@@ -14,6 +14,9 @@ import type {
 import EditorPane from './components/EditorPane.vue'
 import FileTree from './components/FileTree.vue'
 import Icon from './components/Icon.vue'
+import { ReadingPositions } from './editor/positions'
+const mainPositions = new ReadingPositions()
+const rightPositions = new ReadingPositions()
 type Pane = InstanceType<typeof EditorPane>
 const api = window.slipsmd
 const workspace = ref<Workspace | null>(null)
@@ -594,6 +597,7 @@ onBeforeUnmount(() => {
               :key="mainDoc.path"
               ref="mainPane"
               :document="mainDoc"
+              :positions="mainPositions"
               :files="allFiles"
               @change="changed"
               @saved="saved"
@@ -667,6 +671,7 @@ onBeforeUnmount(() => {
               :key="rightDoc.path"
               ref="rightPane"
               :document="rightDoc"
+              :positions="rightPositions"
               :files="allFiles"
               @change="changed"
               @saved="saved"

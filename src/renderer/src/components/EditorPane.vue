@@ -21,10 +21,15 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { autocompletion, completionKeymap, type CompletionContext } from '@codemirror/autocomplete'
 import { tags } from '@lezer/highlight'
 import { livePreview } from '../editor/preview'
+import { ReadingPositions, selectionAt, trackReadingPosition } from '../editor/positions'
 import type { DocumentSnapshot } from '../../../shared/types'
 import Icon from './Icon.vue'
 import 'katex/dist/katex.min.css'
-const props = defineProps<{ document: DocumentSnapshot; files?: string[] }>()
+const props = defineProps<{
+  document: DocumentSnapshot
+  files?: string[]
+  positions: ReadingPositions
+}>()
 const emit = defineEmits<{
   saved: [doc: DocumentSnapshot]
   change: [path: string, dirty: boolean]
@@ -33,7 +38,9 @@ const emit = defineEmits<{
 const host = ref<HTMLElement>()
 const error = ref('')
 const status = ref(props.document.recovered ? '已恢复草稿，请检查后保存' : '')
-const preview = ref(true)
+const position = props.positions.get(props.document.path)
+const preview = ref(position?.preview ?? true)
+let rememberPosition: (() => void) | undefined
 const dirty = ref(props.document.dirty)
 const source = new Compartment()
 const access = new Compartment()
@@ -231,6 +238,7 @@ onMounted(() => {
     parent: host.value!,
     state: EditorState.create({
       doc: props.document.text,
+      selection: selectionAt(position, props.document.text.length),
       extensions: [
         history(),
         drawSelection(),
@@ -277,7 +285,7 @@ onMounted(() => {
           ...searchKeymap,
           indentWithTab,
         ]),
-        source.of(livePreview(props.document.path)),
+        source.of(preview.value ? livePreview(props.document.path) : []),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !applying) stage()
         }),
@@ -305,6 +313,15 @@ onMounted(() => {
       ],
     }),
   })
+  const container = host.value!.closest<HTMLElement>('.primary-document, .related-pane')!
+  rememberPosition = trackReadingPosition(
+    view,
+    container,
+    props.positions,
+    props.document.path,
+    () => preview.value,
+    position,
+  )
 })
 watch(
   () => props.document,
@@ -326,6 +343,7 @@ watch(
 onBeforeUnmount(() => {
   destroyed = true
   clearTimeout(timer)
+  rememberPosition?.()
   view?.destroy()
 })
 defineExpose({

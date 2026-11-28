@@ -4,14 +4,14 @@
 
 **Electron + TypeScript + Vue 3 + CodeMirror 6** · MIT · Windows 优先
 
-当前版本为 **0.1.0-alpha.4**。文件直接保存为普通 UTF-8 Markdown，不需要账号或同步服务器。
+当前版本为 **0.1.0-alpha.5**。文件直接保存为普通 UTF-8 Markdown，不需要账号或同步服务器。
 
 ## 首版功能
 
 - 打开单个文件或文件夹，浏览嵌套目录、新建笔记、按文件名筛选。
 - CodeMirror 6 实时预览：标题、强调、链接、任务框、图片、KaTeX 公式、GFM 表格；随时切换源码模式。
 - Ctrl+点击文件或内部链接，在独立窗口打开；同一文件已有编辑窗口时聚焦原窗口。
-- 普通内部链接在右侧关联面板打开，支持返回、前进与关闭。
+- 普通内部链接在右侧关联面板打开，支持返回、前进与关闭；主区和右侧分别记住各笔记的阅读位置、光标与源码／预览模式。
 - 同工作区出链与反链列表；输入 `[` 补全笔记链接。反链不写入目标正文。
 - Chat 收集箱：无需标题和分类，记录后保存到 Chat.md，之后整理到当前笔记。
 - 粘贴图片保存到笔记旁的 assets 文件夹，或交给本机 PicGo 上传并插入 URL。
@@ -23,7 +23,7 @@
 
 ## 下载和运行
 
-Windows x64 安装包、zip 和 Linux tar.gz 见 [Releases](https://github.com/liuzhouquan/slipsmd/releases/tag/v0.1.0-alpha.4)。也可在本地构建；没有经过代码签名的 alpha 包可能触发 Windows 的未知发布者提示。
+Windows x64 安装包、zip 和 Linux tar.gz 见 [Releases](https://github.com/liuzhouquan/slipsmd/releases/tag/v0.1.0-alpha.5)。也可在本地构建；没有经过代码签名的 alpha 包可能触发 Windows 的未知发布者提示。
 
 开发环境需要 Node.js 24 与 npm。先安装依赖，再启动：
 
@@ -63,6 +63,8 @@ Linux 无显示器的测试环境使用 `xvfb-run -a npm run test:desktop`。测
 
 光标所在行保留 Markdown 标记，其余位置显示排版效果。点击图片、公式或表格的编辑按钮可回到源码。首版表格通过 Markdown 源码编辑，不提供完整电子表格式单元格编辑。
 
+阅读位置：在当前窗口切换笔记、沿右侧历史返回／前进或关闭后重新打开关联笔记，会恢复各自的阅读位置、选区和源码／预览模式。主区与右侧各保留最近 100 份笔记的位置，窗口之间互不影响；关闭窗口后清除，不写入 Markdown 或全局设置。恢复期间主动滚动或操作编辑器会立即接管位置。
+
 PicGo 设置：在 PicGo 中配置图床并启用本地服务，在 SlipsMD 设置中选择“通过 PicGo 自动上传”；默认地址为 `http://127.0.0.1:36677/upload`。SlipsMD 不接管图床密钥。上传失败时临时图片留在应用数据目录的 `pending-images` 下。
 
 快捷方式：点击正文工具栏的图钉固定当前笔记，或点击文件树标题旁的图钉固定当前工作区。左侧“快捷方式”旁的 + 可从系统选择其他文件或文件夹。单击文件保持当前工作区，单击目录切换工作区；Ctrl+点击在独立窗口打开。取消固定只移除入口，不会删除文件。目标移动或不可用时保留入口并提示重新固定；最多保存 50 项。
@@ -77,7 +79,7 @@ PicGo 设置：在 PicGo 中配置图床并启用本地服务，在 SlipsMD 设�
 - 本地图片只在已授权文件目录／工作区内解析；首版支持 PNG、JPEG、GIF、WebP。
 - 文件必须为 UTF-8；首版限制为单文件 20 MB、工作区 10,000 份 Markdown。大型工作区的扫描与索引尚待性能优化。
 - 暂不包含：窗口内 tabs、多工作区双链、图谱、Telegram、远程 Web 编辑、Mermaid 渲染、PDF 导出、内部标题锚点跳转、文件重命名和删除 UI。
-- macOS 未验证；Windows 与 Ubuntu 已通过 [CI](https://github.com/liuzhouquan/slipsmd/actions/runs/46013495945) 的构建、源码启动及打包后桌面流程，具体结果见验证说明。真实 Windows 中文输入法组合输入、真实 PicGo 程序和不同第三方同步客户端仍需人工验收。
+- macOS 未验证；Windows 与 Ubuntu 的构建、源码启动及打包后桌面流程结果见[验证说明](docs/validation.md)。真实 Windows 中文输入法组合输入、真实 PicGo 程序和不同第三方同步客户端仍需人工验收。
 
 ## 开发结构
 
