@@ -33,7 +33,7 @@ npm ci
 npm run dev
 ```
 
-若 Electron 运行时没有随依赖安装完成，可执行 `node node_modules/electron/install.js`。`ELECTRON_RUN_AS_NODE` 环境变量会让 Electron 以 Node 模式运行，开发时应清除此变量。Linux 需要可用的图形环境与 Electron 系统运行库。
+若 Electron 运行时没有随依赖安装完成，可执行 `node node_modules/electron/install.js`。`ELECTRON_RUN_AS_NODE` 环境变量会让 Electron 以 Node 模式运行，开发时应清除此变量。Linux 需要可用的图形环境、Electron 系统运行库及中文字体（CI 使用 Noto CJK，应用不内置字体）。
 
 ```sh
 npm run typecheck
