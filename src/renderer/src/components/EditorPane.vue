@@ -77,9 +77,10 @@ function jumpToAnchor(anchor: string) {
     (container.querySelector<HTMLElement>(':scope > .related-toolbar')?.offsetHeight ?? 0) + 18
   view.dispatch({
     selection: { anchor: from },
-    effects: EditorView.scrollIntoView(from, { y: 'start', yMargin: margin }),
+    effects: anchor ? EditorView.scrollIntoView(from, { y: 'start', yMargin: margin }) : [],
   })
   view.focus()
+  if (!anchor) container.scrollTop = 0
   return true
 }
 function stage() {
