@@ -48,6 +48,7 @@ export function trackReadingPosition(
 ) {
   let restoring = true
   let disposed = false
+  let heading: { from: number; top: boolean } | undefined
   const toolbarHeight = () =>
     container.querySelector<HTMLElement>(':scope > .related-toolbar')?.offsetHeight ?? 0
   const visibleTop = () => container.getBoundingClientRect().top + toolbarHeight()
@@ -57,12 +58,20 @@ export function trackReadingPosition(
     view.requestMeasure({
       key,
       read: () => {
+        if (heading) {
+          if (heading.top) return 0
+          const node = view.domAtPos(Math.min(heading.from, view.state.doc.length)).node
+          const element = node instanceof HTMLElement ? node : node.parentElement
+          const line = element?.closest<HTMLElement>('.cm-line')
+          if (!line) return undefined
+          return container.scrollTop + line.getBoundingClientRect().top - visibleTop() - 18
+        }
         if (!saved || saved.scrollTop === 0) return 0
         const block = view.lineBlockAt(Math.min(saved.top.from, view.state.doc.length))
         return container.scrollTop + view.documentTop + block.top + saved.top.offset - visibleTop()
       },
       write: (top) => {
-        if (restoring && !disposed) container.scrollTop = Math.max(0, top)
+        if (restoring && !disposed && top !== undefined) container.scrollTop = Math.max(0, top)
       },
     })
   }
@@ -76,13 +85,13 @@ export function trackReadingPosition(
   const observer = new ResizeObserver(restore)
   observer.observe(view.contentDOM)
   container.addEventListener('scroll', restore, { passive: true })
-  const deadline = setTimeout(stopRestoring, 1500)
+  let deadline = setTimeout(stopRestoring, 1500)
   for (const event of ['wheel', 'pointerdown', 'keydown', 'touchstart'])
     container.addEventListener(event, stopRestoring, { passive: true })
   restore()
   const remember = () => {
     if (disposed) return
-    if (restoring && saved) positions.set(path, saved)
+    if (restoring && saved && !heading) positions.set(path, saved)
     else {
       const height = visibleTop() - view.documentTop
       const block = view.lineBlockAtHeight(Math.max(0, height))
@@ -101,5 +110,14 @@ export function trackReadingPosition(
     for (const event of ['wheel', 'pointerdown', 'keydown', 'touchstart'])
       container.removeEventListener(event, stopRestoring)
   }
-  return { remember, stopRestoring }
+  const jumpTo = (from: number, top: boolean) => {
+    if (disposed) return
+    heading = { from, top }
+    restoring = true
+    observer.observe(view.contentDOM)
+    clearTimeout(deadline)
+    deadline = setTimeout(stopRestoring, 1500)
+    restore()
+  }
+  return { remember, stopRestoring, jumpTo }
 }

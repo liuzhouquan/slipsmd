@@ -84,6 +84,10 @@ async function clickLink(page, pane, href, modifiers = []) {
   await page.locator(pane + ' ' + selector).click({ modifiers })
 }
 async function expectHeading(page, pane, heading) {
+  // Let the first virtual-layout correction run before checking the final line box.
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
   await page.waitForFunction(
     ({ pane, heading }) => {
       const container = document.querySelector(pane)
@@ -151,6 +155,15 @@ try {
         ),
       ),
   )
+  const readingTop = await page.locator(related).evaluate((el) => {
+    el.dispatchEvent(new WheelEvent('wheel', { bubbles: true }))
+    el.scrollTop += 120
+    return el.scrollTop
+  })
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
+  assert.ok(Math.abs((await page.locator(related).evaluate((el) => el.scrollTop)) - readingTop) < 2)
   await clickLink(page, primary, 'Beta.md#first-target', ['Control'])
   await expectHeading(page, related, 'First Target')
   assert.equal(await page.locator(primary + ' .document-name').innerText(), 'Home.md')

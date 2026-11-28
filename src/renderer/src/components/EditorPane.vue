@@ -47,7 +47,6 @@ const preview = ref(position?.preview ?? true)
 let positionTracker: ReturnType<typeof trackReadingPosition> | undefined
 let indexedDocument: EditorState['doc'] | undefined
 let headings: HeadingAnchor[] = []
-let headingScroll: number | undefined
 const dirty = ref(props.document.dirty)
 const source = new Compartment()
 const access = new Compartment()
@@ -74,13 +73,13 @@ function jumpToAnchor(anchor: string) {
   }
   positionTracker?.stopRestoring()
   const container = host.value!.closest<HTMLElement>('.primary-document, .related-pane')!
-  headingScroll = anchor ? from : undefined
   view.dispatch({
     selection: { anchor: from },
     effects: anchor ? EditorView.scrollIntoView(from, { y: 'start' }) : [],
   })
   view.focus()
   if (!anchor) container.scrollTop = 0
+  positionTracker?.jumpTo(from, !anchor)
   return true
 }
 function stage() {
@@ -294,25 +293,6 @@ onMounted(() => {
         autocompletion({ override: [completeLink], interactionDelay: 0 }),
         Prec.highest(keymap.of(completionKeymap)),
         EditorView.lineWrapping,
-        EditorView.scrollHandler.of((editor, range) => {
-          const target = headingScroll
-          headingScroll = undefined
-          if (target === undefined || range.head !== target) return false
-          // Align the entire rendered heading, rather than the cursor's font box.
-          // The outer pane owns scrolling and may have a sticky related toolbar.
-          const node = editor.domAtPos(target).node
-          const element = node instanceof HTMLElement ? node : node.parentElement
-          const line = element?.closest<HTMLElement>('.cm-line')
-          const container = host.value!.closest<HTMLElement>('.primary-document, .related-pane')!
-          if (!line) return false
-          const toolbar = container.querySelector<HTMLElement>(':scope > .related-toolbar')
-          container.scrollTop +=
-            line.getBoundingClientRect().top -
-            container.getBoundingClientRect().top -
-            (toolbar?.offsetHeight ?? 0) -
-            18
-          return true
-        }),
         access.of([
           EditorState.readOnly.of(props.document.readOnly || props.blocked),
           EditorView.editable.of(!props.document.readOnly && !props.blocked),
