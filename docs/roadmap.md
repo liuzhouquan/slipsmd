@@ -1,5 +1,7 @@
 # 开发计划
 
+本文件保留阶段目标与历史；最新基线、近期候选任务和认领入口以 [progress.md](progress.md) 为准。每个新特性的规格、计划和交接方式见 [development.md](development.md)。
+
 已按用户决定采用 CodeMirror 6，实现首版 alpha。实际范围、运行方式和限制以 README 为准，验证记录见 validation.md。
 
 阶段 1–3 的基础文件、多窗口、链接、Chat、图片和主题已实现；原先阶段 0 的 Muya 实验已被 CodeMirror 6 路线取代。Windows IME 人工验证和大库性能尚待后续。逐文档阅读位置已在 alpha.5 实现，文件重命名／工作区内移动已在 alpha.6 实现。以下保留初期阶段划分用于追踪，不表示所有项目已完成。

@@ -1,6 +1,21 @@
 # SlipsMD 开发约定
 
-先读 README.md、docs/product.md、docs/decisions.md，再读当前阶段的 docs/roadmap.md。
+先读 README.md、docs/development.md、docs/progress.md，再读 docs/product.md、docs/decisions.md、当前任务的 spec.md / plan.md。docs/roadmap.md 保留阶段说明与历史。
+
+## 协作与交付
+
+- 新特性、修复和独立文档改动默认使用任务分支与独立 worktree；main 只用于集成，不直接编辑／提交／推送。已有任务范围内的修正继续用原分支。
+- 采用 docs/development.md 的轻量规格驱动流程：任务认领 → spec → plan → 实现 → 验证 → PR → 独立审核 → 合并。
+- docs/progress.md 是进度与路线入口；每个任务使用 docs/tasks/<任务 ID>/ 下的 spec.md、plan.md、progress.md。沿用 docs/tasks/_template/，小修可合并章节并在 PR 说明，不为拼写更正另建整套规格。
+- 协调者分配唯一任务 ID、负责人、分支和文件范围；独立会话通过远端任务 Issue／PR 和已提交文档交接，不能假定共享聊天记录或未提交改动。
+- 每个工作 worktree 只有一个写入者；多个 agent 可以并行处理边界清楚的不同任务，不得并行修改同一分支或共用构建输出、测试笔记和 Electron 用户数据目录。
+- 使用其他 agent 执行独立 PR 审核；审核者读取 spec / plan 和完整差异，不代作者实现。支持子 agent 时分配给独立上下文；不支持时交接另一会话，不得把作者自查写成独立审核。
+- PR 记录被审核的确切 HEAD SHA、审核者、结论、问题处理和验证证据；被审核内容改变后重新审核。只改 PR 描述／审核评论不改变 HEAD。
+- 所有 PR（含纯文档）等待当前提交的 Windows 与 Ubuntu CI；修复／合并主线后重新验证，禁止用 --admin、关闭保护或强推绕过检查。
+- 合并由协调者串行执行，使用已审核 HEAD 的匹配保护并 squash；main 更新后再启动后续任务或处理依赖任务。
+- 中断／换 agent 前更新任务 progress.md；进度不得只留在聊天。目录规则、认领、交接、同账号审核限制与清理方法见 docs/development.md。
+
+## 产品与实现
 
 - 当前品牌显示为 SlipsMD，仓库与本地目录为 slipsmd；npm 包名和可执行文件为 slipsmd，应用 ID 为 io.slipsmd.desktop。旧名称仅允许出现在历史数据兼容代码及其测试中。
 - 首期只使用英文品牌，不添加中文名称或中文品牌标识；中文界面文案正常保留。新名称须先检查网页与代码托管平台上的重名情况。
