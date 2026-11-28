@@ -68,6 +68,10 @@ const primary = '.primary-document'
 const related = '.related-pane'
 const track = (page) => page.on('pageerror', (error) => errors.push(error.message))
 async function clickLink(page, pane, href, modifiers = []) {
+  // Finish any cursor scroll queued by the preceding edit before scrolling to links.
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
   await page.locator(pane).evaluate((el) => {
     el.dispatchEvent(new WheelEvent('wheel', { bubbles: true }))
     el.scrollTop = 0
