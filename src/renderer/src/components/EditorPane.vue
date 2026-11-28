@@ -30,6 +30,7 @@ const props = defineProps<{
   files?: string[]
   positions: ReadingPositions
   blocked?: boolean
+  actionsDisabled?: boolean
 }>()
 const emit = defineEmits<{
   saved: [doc: DocumentSnapshot]
@@ -375,7 +376,7 @@ defineExpose({
           class="icon-button"
           aria-label="重命名或移动笔记"
           :title="document.readOnly ? '请回原编辑窗口重命名或移动' : '重命名或移动笔记'"
-          :disabled="document.readOnly || blocked"
+          :disabled="document.readOnly || blocked || actionsDisabled"
           @click="emit('relocate', document.path)"
         >
           <Icon name="rename" :size="16" /></button

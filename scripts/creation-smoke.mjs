@@ -212,7 +212,10 @@ try {
 
   await page.locator('.file-tree .file-row').filter({ hasText: 'Home' }).click()
   await expectName(page, 'Home.md')
-  await page.keyboard.press('F2')
+  await page
+    .locator('.primary-document')
+    .getByRole('button', { name: '重命名或移动笔记', exact: true })
+    .click()
   const move = page.getByRole('dialog', { name: '重命名或移动笔记', exact: true })
   await move.waitFor()
   await page.getByLabel('新路径（相对工作区）', { exact: true }).fill('写作/草稿/Home moved.md')
