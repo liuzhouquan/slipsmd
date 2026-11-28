@@ -76,9 +76,10 @@ try {
   track(page)
   await page.waitForSelector('.primary-document .cm-editor')
   await page.locator('.file-tree summary').filter({ hasText: 'Existing' }).click()
-  const next = application.waitForEvent('window')
-  await page.getByRole('button', { name: '新建独立窗口', exact: true }).click()
-  const second = await next
+  const [second] = await Promise.all([
+    application.waitForEvent('window', { timeout: 30000 }),
+    page.getByRole('button', { name: '新建独立窗口', exact: true }).click(),
+  ])
   track(second)
   await second.waitForSelector('.file-tree')
   await page.bringToFront()
@@ -88,6 +89,9 @@ try {
   await page.keyboard.type('Remember while creating folders.', { delay: 5 })
   await openCreate(page, 'folder')
   assert.equal(await input(page).inputValue(), 'Existing/')
+  assert.ok(
+    await dialog(page, 'folder').getByRole('button', { name: '创建', exact: true }).isDisabled(),
+  )
   await input(page).fill('写作')
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'create-destination')
   await page.keyboard.press('Shift+Tab')
@@ -118,6 +122,9 @@ try {
   await dialog(page, 'folder').waitFor({ state: 'hidden' })
   await openCreate(page, 'file')
   assert.equal(await input(page).inputValue(), '写作/草稿/')
+  assert.ok(
+    await dialog(page, 'file').getByRole('button', { name: '创建', exact: true }).isDisabled(),
+  )
   await input(page).fill('写作/草稿/第一篇')
   await page.screenshot({ path: path.join(output, 'creation-note-light.png') })
   await dialog(page, 'file').getByRole('button', { name: '创建', exact: true }).click()
@@ -242,6 +249,7 @@ try {
   assert.deepEqual(errors, [])
   console.log('PASS: workspace authorization enforced in main process; no renderer exceptions')
 } catch (error) {
+  console.error(error)
   const page = application?.windows()[0]
   if (page) {
     await page.screenshot({ path: path.join(output, 'creation-failure.png') }).catch(() => {})
@@ -249,6 +257,15 @@ try {
   }
   throw error
 } finally {
-  await application?.close()
+  for (const page of application?.windows() ?? [])
+    await page
+      .evaluate(() => document.querySelectorAll('dialog[open]').forEach((el) => el.close()))
+      .catch(() => {})
+  const cleanupDeadline = setTimeout(() => application?.process().kill('SIGKILL'), 10000)
+  try {
+    await application?.close()
+  } finally {
+    clearTimeout(cleanupDeadline)
+  }
   if (!process.env.SLIPSMD_KEEP_TEST_DATA) await fs.rm(temp, { recursive: true, force: true })
 }

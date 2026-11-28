@@ -56,6 +56,7 @@ const createKind = ref<'file' | 'folder'>('file')
 const creating = ref(false)
 const createError = ref('')
 const newName = ref('')
+const createNameReady = computed(() => !!newName.value.trim().split(/[\\/]/).at(-1)?.trim())
 const chatText = ref('')
 const captures = ref<Capture[]>([])
 const linkInfo = ref<LinkInfo>({ outgoing: [], backlinks: [] })
@@ -711,6 +712,7 @@ onBeforeUnmount(() => {
             class="icon-button"
             title="新建独立窗口 · Ctrl+Shift+N"
             aria-label="新建独立窗口"
+            :disabled="busy"
             @click="run(() => api.openWindow())"
           >
             <Icon name="window" /></button
@@ -1016,7 +1018,7 @@ onBeforeUnmount(() => {
         <p id="create-error" class="move-error" role="alert">{{ createError }}</p>
         <div class="dialog-actions">
           <button type="button" :disabled="creating" @click="createDialog?.close()">取消</button>
-          <button class="primary" :disabled="!newName.trim() || busy" type="submit">
+          <button class="primary" :disabled="!createNameReady || busy" type="submit">
             {{ creating ? '正在创建…' : '创建' }}
           </button>
         </div>
