@@ -100,6 +100,8 @@ PicGo 设置：在 PicGo 中配置图床并启用本地服务，在 SlipsMD 设�
 
 开发与多 agent 协作从 [进度与近期路线](docs/progress.md) 和 [开发流程](docs/development.md) 开始。新任务默认使用独立分支／worktree，按 spec → plan → 实现／验证 → PR → 独立审核 → 合并交付；规范见 [AGENTS.md](AGENTS.md)。
 
+TASK-003 提供源码侧的[移动链接修复只读预览](docs/link-repair-preview.md)：运行 `node scripts/preview-link-repair.mjs --help` 查看命令。它生成可选择的 URL 替换建议，不执行移动或写入；现有应用移动行为保持不变。
+
 ```text
 src/main/       窗口、文件服务、工作区、Chat、链接与 PicGo
 src/preload/    隔离的类型化 IPC 桥
