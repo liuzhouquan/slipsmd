@@ -3,7 +3,11 @@ import { ref } from 'vue'
 import type { FileNode } from '../../../shared/types'
 import Icon from './Icon.vue'
 defineProps<{ nodes: FileNode[]; selected: string | null; query: string }>()
-const emit = defineEmits<{ open: [path: string, newWindow: boolean]; directory: [path: string] }>()
+const emit = defineEmits<{
+  open: [path: string, newWindow: boolean]
+  directory: [path: string]
+  'relocate-directory': [path: string]
+}>()
 const host = ref<HTMLUListElement>()
 function reveal(path: string, focus = false) {
   const target = path.replace(/\\/g, '/').replace(/\/$/, '')
@@ -35,7 +39,16 @@ function visible(node: FileNode, query: string): boolean {
           <summary :data-path="node.path" :title="node.path" @click="emit('directory', node.path)">
             <Icon name="chevron" :size="13" /><Icon name="folder" :size="16" /><span>{{
               node.name
-            }}</span>
+            }}</span
+            ><button
+              type="button"
+              class="icon-button tree-action"
+              :aria-label="'重命名或移动文件夹 ' + node.name"
+              title="重命名或移动文件夹"
+              @click.stop.prevent="emit('relocate-directory', node.path)"
+            >
+              <Icon name="pencil" :size="13" />
+            </button>
           </summary>
           <FileTree
             :nodes="node.children || []"
@@ -43,6 +56,7 @@ function visible(node: FileNode, query: string): boolean {
             :query="query"
             @open="(p, n) => emit('open', p, n)"
             @directory="(p) => emit('directory', p)"
+            @relocate-directory="(p) => emit('relocate-directory', p)"
           />
         </details>
         <button

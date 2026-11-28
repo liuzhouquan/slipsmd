@@ -10,7 +10,7 @@ import { extractLinks, isInside, resolveNote } from './links'
 import { LinkIndex } from './link-index'
 import { importLegacyProfiles } from './migration'
 import { addPin, createPin, normalizePins, resolvePin } from './pins'
-import { moveTarget } from './relocation'
+import { folderMoveTarget, moveTarget, replaceFolderPrefix } from './relocation'
 import { createDirectory, newNoteTarget } from './workspace-files'
 import { excludedDirectories as excluded } from './workspace-paths'
 import { captureMarker, hasCaptureSource, parseCaptures } from '../shared/captures'
@@ -128,6 +128,16 @@ async function grant(state: WindowState, candidate: string, allowMissing = false
   if (!state.allowed.has(canonical) && !(state.root && isInside(state.root, canonical)))
     throw new Error('请通过打开文件或工作区授权访问此路径。')
   if (!/\.(md|markdown)$/i.test(canonical)) throw new Error('请选择 Markdown 文件。')
+  return canonical
+}
+async function grantFolder(state: WindowState, candidate: string): Promise<string> {
+  assertText(candidate)
+  if (!state.root) throw new Error('请先打开文件夹。')
+  const lstat = await fs.lstat(candidate)
+  if (lstat.isSymbolicLink() || !lstat.isDirectory())
+    throw new Error('源路径不是可移动的普通文件夹。')
+  const canonical = await fs.realpath(candidate)
+  if (!isInside(state.root, canonical)) throw new Error('请通过打开文件或工作区授权访问此路径。')
   return canonical
 }
 async function persistSettings() {
@@ -410,6 +420,49 @@ function registerHandlers() {
     }
     broadcast({ type: 'filesystem' })
     return { document, warning }
+  })
+  handle('moveFolder', async (state, candidate, destination) => {
+    const folder = await grantFolder(state, candidate)
+    const target = await folderMoveTarget(folder, state.root, destination)
+    if (folder === target) return { path: target, warning: null }
+    const moved = await store.relocateFolder(folder, target)
+    invalidateLinks(folder)
+    invalidateLinks(target)
+    for (const current of states.values()) {
+      const nextAllowed = new Set<string>()
+      for (const entry of current.allowed)
+        nextAllowed.add(replaceFolderPrefix(entry, folder, target) ?? entry)
+      current.allowed = nextAllowed
+      if (current.initial)
+        current.initial = replaceFolderPrefix(current.initial, folder, target) ?? current.initial
+      for (const item of moved) {
+        send(current, {
+          type: 'relocated',
+          previous: item.previous,
+          document: {
+            ...item.document,
+            readOnly: current.win.webContents.id !== item.owner,
+          },
+        })
+      }
+      send(current, { type: 'folderRelocated', previous: folder, path: target })
+    }
+    settings.pins = normalizePins(
+      settings.pins.map((pin) => {
+        const updated = replaceFolderPrefix(pin.path, folder, target)
+        return updated ? { ...pin, path: updated, name: path.basename(updated) } : pin
+      }),
+    )
+    broadcast({ type: 'settings', settings })
+    let warning: string | null = null
+    try {
+      await persistSettings()
+    } catch (error) {
+      console.error('Move folder settings:', error)
+      warning = '文件夹已移动，但快捷方式设置保存失败；请重新固定相关入口。'
+    }
+    broadcast({ type: 'filesystem' })
+    return { path: target, warning }
   })
   handle('stageDocument', async (state, candidate, text, revision) => {
     assertText(text, 20 * 1024 * 1024)

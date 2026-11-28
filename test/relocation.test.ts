@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { DocumentStore, digest } from '../src/main/documents'
-import { moveTarget } from '../src/main/relocation'
+import { folderMoveTarget, moveTarget, replaceFolderPrefix } from '../src/main/relocation'
 
 let root: string, file: string, target: string, store: DocumentStore
 beforeEach(async () => {
@@ -181,5 +181,112 @@ describe('authorized move destinations', () => {
     await expect(moveTarget(path.join(work, 'Note.md'), work, 'escape/New.md')).rejects.toThrow(
       '工作区外',
     )
+  })
+})
+
+describe('folderMoveTarget and DocumentStore.relocateFolder', () => {
+  it('validates folder destinations and rejects root, self/descendant, missing parent, and escaped links', async () => {
+    const work = path.join(root, 'workspace')
+    const folder = path.join(work, '写作')
+    const nested = path.join(folder, '草稿')
+    const archive = path.join(work, '归档')
+    await fs.mkdir(nested, { recursive: true })
+    await fs.mkdir(archive, { recursive: true })
+
+    expect(await folderMoveTarget(folder, work, '归档/新写作')).toBe(path.join(archive, '新写作'))
+    expect(
+      replaceFolderPrefix(path.join(nested, 'a.md'), folder, path.join(archive, '新写作')),
+    ).toBe(path.join(archive, '新写作', '草稿', 'a.md'))
+    expect(
+      replaceFolderPrefix(path.join(work, 'Home.md'), folder, path.join(archive, '新写作')),
+    ).toBeNull()
+
+    await expect(folderMoveTarget(work, work, 'RenamedRoot')).rejects.toThrow('工作区根目录')
+    await expect(folderMoveTarget(folder, null, 'Renamed')).rejects.toThrow('工作区文件夹')
+    await expect(folderMoveTarget(folder, work, '写作/草稿/子目录')).rejects.toThrow(
+      '自身或其子文件夹',
+    )
+    await expect(folderMoveTarget(folder, work, '不存在/目标')).rejects.toThrow(
+      '目标上级文件夹不存在',
+    )
+    await expect(folderMoveTarget(folder, work, '.git')).rejects.toThrow()
+    await expect(folderMoveTarget(file, work, 'Renamed')).rejects.toThrow('工作区文件夹')
+  })
+
+  it('moves folder with multiple open sessions across owners and preserves exact bytes', async () => {
+    const work = path.join(root, 'workspace')
+    const folder = path.join(work, 'Drafts')
+    const sub = path.join(folder, 'Sub')
+    const targetFolder = path.join(work, 'Archive', 'Drafts')
+    await fs.mkdir(sub, { recursive: true })
+    await fs.mkdir(path.join(work, 'Archive'), { recursive: true })
+
+    const noteA = path.join(folder, 'A.md')
+    const noteB = path.join(sub, 'B.md')
+    const bytesA = Buffer.from('\uFEFF# A\r\n\r\nBody A\r\n')
+    const bytesB = Buffer.from('# B\n\nBody B\n')
+    await fs.writeFile(noteA, bytesA)
+    await fs.writeFile(noteB, bytesB)
+
+    await store.open(noteA, 1)
+    await store.open(noteB, 2)
+
+    const moved = await store.relocateFolder(folder, targetFolder)
+    expect(moved).toHaveLength(2)
+    await expect(fs.stat(folder)).rejects.toMatchObject({ code: 'ENOENT' })
+
+    const nextA = path.join(targetFolder, 'A.md')
+    const nextB = path.join(targetFolder, 'Sub', 'B.md')
+    expect(await fs.readFile(nextA)).toEqual(bytesA)
+    expect(await fs.readFile(nextB)).toEqual(bytesB)
+    expect(store.owner(noteA)).toBeUndefined()
+    expect(store.owner(noteB)).toBeUndefined()
+    expect(store.owner(nextA)).toBe(1)
+    expect(store.owner(nextB)).toBe(2)
+  })
+
+  it('refuses to overwrite an existing empty directory, file, or symlink', async () => {
+    const work = path.join(root, 'workspace')
+    const folder = path.join(work, 'Source')
+    const emptyTarget = path.join(work, 'ExistingEmpty')
+    const fileTarget = path.join(work, 'ExistingFile')
+    await fs.mkdir(folder, { recursive: true })
+    await fs.mkdir(emptyTarget, { recursive: true })
+    await fs.writeFile(path.join(folder, 'Note.md'), '# Note\n')
+    await fs.writeFile(fileTarget, 'keep me')
+
+    await expect(store.relocateFolder(folder, emptyTarget)).rejects.toThrow('目标已存在')
+    await expect(store.relocateFolder(folder, fileTarget)).rejects.toThrow('目标已存在')
+    expect(await fs.readFile(fileTarget, 'utf8')).toBe('keep me')
+    expect(await fs.readFile(path.join(folder, 'Note.md'), 'utf8')).toBe('# Note\n')
+  })
+
+  it('refuses when any session is dirty, externally modified, or has a recovery draft', async () => {
+    const work = path.join(root, 'workspace')
+    const folder = path.join(work, 'Source')
+    const targetFolder = path.join(work, 'Target')
+    await fs.mkdir(folder, { recursive: true })
+    const note = path.join(folder, 'Note.md')
+    await fs.writeFile(note, '# Note\n')
+
+    const snap = await store.open(note, 1)
+    await store.stage(note, '# Edited\n', 1, snap.revision)
+    await expect(store.relocateFolder(folder, targetFolder)).rejects.toThrow('未保存的笔记')
+
+    await store.save(note, 1)
+    await fs.writeFile(note, '# External change\n')
+    await expect(store.relocateFolder(folder, targetFolder)).rejects.toThrow('外部程序修改')
+
+    await store.reload(note, 1)
+    await store.release(note, 1)
+
+    // Closed file with leftover recovery draft under targetFolder
+    const targetNote = path.join(targetFolder, 'Note.md')
+    await fs.mkdir(path.join(root, 'drafts'), { recursive: true })
+    await fs.writeFile(
+      path.join(root, 'drafts', digest(targetNote) + '.json'),
+      JSON.stringify({ path: targetNote, text: '# Draft\n', revision: 'rev' }),
+    )
+    await expect(store.relocateFolder(folder, targetFolder)).rejects.toThrow('恢复草稿')
   })
 })

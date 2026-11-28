@@ -16,6 +16,7 @@ const api: DesktopAPI = {
   createFile: (name) => invoke('createFile', name),
   createFolder: (path) => invoke('createFolder', path),
   moveDocument: (path, destination) => invoke('moveDocument', path, destination),
+  moveFolder: (path, destination) => invoke('moveFolder', path, destination),
   readDocument: (path) => invoke('readDocument', path),
   stageDocument: (path, text, revision) => invoke('stageDocument', path, text, revision),
   saveDocument: (path) => invoke('saveDocument', path),

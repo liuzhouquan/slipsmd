@@ -5,6 +5,7 @@ for (const script of [
   'scripts/pins-smoke.mjs',
   'scripts/positions-smoke.mjs',
   'scripts/relocation-smoke.mjs',
+  'scripts/folder-relocation-smoke.mjs',
   'scripts/creation-smoke.mjs',
   'scripts/anchors-smoke.mjs',
   'scripts/index-smoke.mjs',

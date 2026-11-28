@@ -40,6 +40,10 @@ export interface MoveResult {
   document: DocumentSnapshot
   warning: string | null
 }
+export interface FolderMoveResult {
+  path: string
+  warning: string | null
+}
 export interface LinkEntry {
   source: string
   target: string
@@ -74,6 +78,7 @@ export type AppEvent =
   | { type: 'document'; document: DocumentSnapshot }
   | { type: 'settings'; settings: Settings }
   | { type: 'relocated'; previous: string; document: DocumentSnapshot }
+  | { type: 'folderRelocated'; previous: string; path: string }
   | { type: 'command'; command: string }
 export interface DesktopAPI {
   closeWindow(): Promise<void>
@@ -84,6 +89,7 @@ export interface DesktopAPI {
   createFile(name: string): Promise<string>
   createFolder(path: string): Promise<string>
   moveDocument(path: string, destination: string): Promise<MoveResult>
+  moveFolder(path: string, destination: string): Promise<FolderMoveResult>
   readDocument(path: string): Promise<DocumentSnapshot>
   stageDocument(path: string, text: string, revision: string): Promise<void>
   saveDocument(path: string): Promise<DocumentSnapshot>
