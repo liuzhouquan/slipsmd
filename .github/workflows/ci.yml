@@ -60,11 +60,13 @@ jobs:
         with:
           name: diagnostics-${{ runner.os }}
           path: .test-results/
+          include-hidden-files: true
       - name: Desktop screenshots
         uses: actions/upload-artifact@v7.0.2
         if: success()
         with:
           name: desktop-evidence-${{ runner.os }}
           path: .test-results/*.png
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 7

@@ -177,9 +177,8 @@ try {
     )
   }
   await page.evaluate(() => window.slipsmd.updateSettings({ theme: 'dark' }))
-  await application.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()[0].setSize(760, 540),
-  )
+  const nativeWindow = await application.browserWindow(page)
+  await nativeWindow.evaluate((win) => win.setSize(760, 540))
   await page.waitForFunction(
     () =>
       innerWidth <= 760 && innerWidth >= 700 && document.documentElement.dataset.theme === 'dark',
@@ -205,9 +204,7 @@ try {
     longName,
   )
   assert.ok(await page.locator('.tree-scroll').evaluate((el) => el.scrollWidth <= el.clientWidth))
-  await application.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()[0].setSize(1240, 840),
-  )
+  await nativeWindow.evaluate((win) => win.setSize(1240, 840))
   await page.evaluate(() => window.slipsmd.updateSettings({ theme: 'light' }))
   console.log(
     'PASS: recoverable errors, Escape, collision/traversal/missing-parent/ignored-folder guards, and dark minimum-window layout',
