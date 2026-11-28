@@ -144,6 +144,49 @@ describe('move link rewrite planning', () => {
     ).toThrow('同一工作区')
   })
 
+  it('uses dot targets for links to the future parent directory', () => {
+    const result = rewrite(
+      '[folder](Archive/) [plain](Archive) [section](Archive/#heading)',
+      source,
+    )
+    expect(result.text).toBe('[folder](./) [plain](.) [section](./#heading)')
+  })
+
+  it('excludes the whole HTML-containing block even when tags are nested in emphasis', () => {
+    const text = '[old](Old%20note.md) *<span>text</span>*\n\n[separate](Old%20note.md)'
+    const result = rewrite(text)
+    expect(result.text).toBe(
+      '[old](Old%20note.md) *<span>text</span>*\n\n[separate](Archive/%E6%96%B0%20%28note%29.md)',
+    )
+    expect(result.edits).toHaveLength(1)
+  })
+
+  it('never conflates case-distinct paths, including Windows sensitive-directory candidates', () => {
+    const context = {
+      root,
+      source: path.join(root, 'Old.md'),
+      target: path.join(root, 'Archive/New.md'),
+      document: path.join(root, 'Index.md'),
+    }
+    const lower = planUrlEdits('[other](old.md)', context)
+    expect(lower.edits).toEqual([])
+    const distinctDocument = planUrlEdits('![image](assets/a.png)', {
+      ...context,
+      document: path.join(root, 'old.md'),
+    })
+    expect(distinctDocument.edits).toEqual([])
+    if (process.platform === 'win32') {
+      expect(lower.diagnostics[0].code).toBe('case-ambiguous')
+      expect(distinctDocument.diagnostics[0].code).toBe('case-ambiguous')
+    }
+    expect(() =>
+      planUrlEdits('[old](Old.md)', {
+        ...context,
+        source: path.resolve(root.toUpperCase(), 'Old.md'),
+      }),
+    ).toThrow('同一工作区')
+  })
+
   it('bounds dense syntax and diagnostic reports rather than claiming complete proposals', () => {
     const dense = planUrlEdits('[x](Old%20note.md) '.repeat(20010), move())
     expect(dense.edits).toEqual([])

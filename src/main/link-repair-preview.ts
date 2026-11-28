@@ -3,10 +3,15 @@ import path from 'node:path'
 import { constants, type BigIntStats } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { setImmediate } from 'node:timers/promises'
-import { isInside } from './links'
 import { moveTarget } from './relocation'
 import { excludedDirectories, relativeParts } from './workspace-paths'
-import { pathKey, planUrlEdits, type RepairDiagnostic, type UrlEdit } from './link-repair'
+import {
+  pathKey,
+  isWithinRepairRoot,
+  planUrlEdits,
+  type RepairDiagnostic,
+  type UrlEdit,
+} from './link-repair'
 
 const defaults = {
   maxFiles: 10000,
@@ -115,7 +120,7 @@ async function listFiles(root: string, limits: Limits, diagnostics: RepairDiagno
 
 async function stampFile(root: string, file: string) {
   const canonical = await fs.realpath(file)
-  if (!isInside(root, canonical) || pathKey(canonical) !== pathKey(file))
+  if (!isWithinRepairRoot(root, canonical) || pathKey(canonical) !== pathKey(file))
     throw new Error('文件路径已改变或越界。')
   const stat = await fs.lstat(file, { bigint: true })
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('源不是普通文件。')
@@ -179,8 +184,17 @@ export async function previewLinkRepair(
     throw new Error('源必须是工作区可见的 Markdown 文件。')
   await stampFile(root, source)
   const target = await moveTarget(source, root, targetInput)
+  if (!isWithinRepairRoot(root, target)) throw new Error('目标真实路径不在同一工作区。')
   if (pathKey(source) === pathKey(target)) throw new Error('源与目标相同，无需移动预览。')
-  if ([source, target].some((file) => pathKey(file) === pathKey(path.join(root, 'Chat.md'))))
+  if (
+    [source, target].some(
+      (file) =>
+        pathKey(path.dirname(file)) === pathKey(root) &&
+        (process.platform === 'win32'
+          ? path.basename(file).toLowerCase() === 'chat.md'
+          : path.basename(file) === 'Chat.md'),
+    )
+  )
     throw new Error('Chat.md 是工作区收集箱，不能作为移动源或目标。')
   await assertMissing(target)
   const diagnostics: RepairDiagnostic[] = []

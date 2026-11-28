@@ -1,11 +1,22 @@
 import path from 'node:path'
 import { markdownLanguage } from '@codemirror/lang-markdown'
 import MarkdownIt from 'markdown-it'
-import { isInside } from './links'
 
 const unescape = new MarkdownIt().utils.unescapeAll
-export const pathKey = (file: string) =>
-  process.platform === 'win32' ? path.normalize(file).toLowerCase() : path.normalize(file)
+// Do not infer a directory's case-sensitivity from its operating system.
+export const pathKey = (file: string) => path.normalize(file)
+export function isWithinRepairRoot(root: string, file: string) {
+  if (!path.isAbsolute(root) || !path.isAbsolute(file)) return false
+  const base = path.resolve(root)
+  const candidate = path.resolve(file)
+  return (
+    candidate === base || candidate.startsWith(base.endsWith(path.sep) ? base : base + path.sep)
+  )
+}
+const ambiguousCase = (first: string, second: string) =>
+  process.platform === 'win32' &&
+  pathKey(first) !== pathKey(second) &&
+  pathKey(first).toLowerCase() === pathKey(second).toLowerCase()
 export interface MoveContext {
   root: string
   source: string
@@ -81,8 +92,19 @@ const encodedPath = (file: string) =>
 export function planUrlEdits(text: string, move: MoveContext) {
   if (!path.isAbsolute(move.root)) throw new Error('规划工作区必须使用绝对路径。')
   for (const candidate of [move.source, move.target, move.document])
-    if (!path.isAbsolute(candidate) || !isInside(move.root, candidate))
+    if (!path.isAbsolute(candidate) || !isWithinRepairRoot(move.root, candidate))
       throw new Error('规划路径必须位于同一工作区。')
+  if (ambiguousCase(move.document, move.source))
+    return {
+      edits: [] as UrlEdit[],
+      diagnostics: [
+        {
+          level: 'warning',
+          code: 'case-ambiguous',
+          message: '文档与移动源仅大小写不同，不能假定是同一文件，请手动核对。',
+        } satisfies RepairDiagnostic,
+      ],
+    }
   const tree = markdownLanguage.parser.parse(text)
   const ignored: Range[] = [{ from: 0, to: metadataEnd(text) }]
   const urls: (Range & { kind: UrlEdit['kind'] })[] = []
@@ -96,7 +118,8 @@ export function planUrlEdits(text: string, move: MoveContext) {
       if (['FencedCode', 'CodeBlock', 'InlineCode', 'HTMLBlock'].includes(node.name))
         ignored.push({ from: node.from, to: node.to })
       if (node.name === 'HTMLTag') {
-        const parent = node.node.parent
+        let parent = node.node.parent
+        while (parent && !parent.type.is('Block')) parent = parent.parent
         if (parent) ignored.push({ from: parent.from, to: parent.to })
       }
       if (node.name !== 'URL') return
@@ -202,8 +225,12 @@ export function planUrlEdits(text: string, move: MoveContext) {
     const resolve = (document: string) =>
       rooted ? path.resolve(move.root, '.' + local) : path.resolve(path.dirname(document), local)
     const originalTarget = resolve(move.document)
-    if (!isInside(move.root, originalTarget)) {
+    if (!isWithinRepairRoot(move.root, originalTarget)) {
       warn('outside-workspace', '目标位于工作区外，保持原样。')
+      continue
+    }
+    if (ambiguousCase(originalTarget, move.source)) {
+      warn('case-ambiguous', '目标与移动源仅大小写不同，保持原样并核对真实文件身份。')
       continue
     }
     const directory = local.endsWith('/')
@@ -215,7 +242,7 @@ export function planUrlEdits(text: string, move: MoveContext) {
     if (pathKey(resolve(afterDocument)) === pathKey(desired)) continue
     const rebuilt = rooted
       ? '/' + encodedPath(path.relative(move.root, desired))
-      : encodedPath(path.relative(path.dirname(afterDocument), desired))
+      : encodedPath(path.relative(path.dirname(afterDocument), desired)) || '.'
     const after = rebuilt + (directory && !rebuilt.endsWith('/') ? '/' : '') + fragment
     edits.push({ ...url, before, after, line: line + 1 })
     if (edits.length > 10000) {
