@@ -27,6 +27,7 @@ interface WindowState {
   root: string | null
   allowed: Set<string>
   initial: string | null
+  anchor?: string
   watcher?: FSWatcher
 }
 const states = new Map<number, WindowState>()
@@ -143,14 +144,14 @@ async function setWorkspace(state: WindowState, root: string) {
   ].slice(0, 8)
   await persistSettings()
 }
-async function openWindow(file?: string, root?: string | null) {
+async function openWindow(file?: string, root?: string | null, anchor?: string) {
   if (file) {
     const owner = store.owner(file)
     const existing = owner ? states.get(owner) : undefined
     if (existing) {
       existing.win.show()
       existing.win.focus()
-      send(existing, { type: 'navigate', path: file })
+      send(existing, { type: 'navigate', path: file, anchor })
       return
     }
   }
@@ -176,6 +177,7 @@ async function openWindow(file?: string, root?: string | null) {
     root: null,
     allowed: new Set(file ? [file] : []),
     initial: file ?? null,
+    anchor,
   }
   states.set(win.webContents.id, state)
   if (root) await setWorkspace(state, root)
@@ -241,6 +243,7 @@ function registerHandlers() {
     document: state.initial,
     settings,
     version: app.getVersion(),
+    anchor: state.anchor,
   }))
   handle('openFolder', async (state) => {
     const result = await dialog.showOpenDialog(state.win, { properties: ['openDirectory'] })
@@ -404,9 +407,13 @@ function registerHandlers() {
     state.allowed.add(await fs.realpath(result.filePath))
     return result.filePath
   })
-  handle('openWindow', async (state, candidate) =>
-    openWindow(candidate ? await grant(state, candidate) : undefined, state.root),
-  )
+  handle('openWindow', async (state, candidate, anchor) => {
+    if (anchor !== undefined) {
+      assertText(anchor, 2048)
+      if (!candidate) throw new Error('请先选择目标笔记。')
+    }
+    return openWindow(candidate ? await grant(state, candidate) : undefined, state.root, anchor)
+  })
   handle('resolveLink', async (state, source, href) => {
     const file = await grant(state, source)
     if (state.root && !isInside(state.root, file))

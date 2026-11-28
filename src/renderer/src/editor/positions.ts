@@ -80,7 +80,7 @@ export function trackReadingPosition(
   for (const event of ['wheel', 'pointerdown', 'keydown', 'touchstart'])
     container.addEventListener(event, stopRestoring, { passive: true })
   restore()
-  return () => {
+  const remember = () => {
     if (disposed) return
     if (restoring && saved) positions.set(path, saved)
     else {
@@ -101,4 +101,5 @@ export function trackReadingPosition(
     for (const event of ['wheel', 'pointerdown', 'keydown', 'touchstart'])
       container.removeEventListener(event, stopRestoring)
   }
+  return { remember, stopRestoring }
 }

@@ -476,6 +476,10 @@ button.is-pinned {
   color: var(--danger);
   background: var(--panel);
 }
+.notice > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .statusbar {
   height: 28px;
   min-height: 28px;

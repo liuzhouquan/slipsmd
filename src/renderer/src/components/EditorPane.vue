@@ -23,6 +23,7 @@ import { tags } from '@lezer/highlight'
 import { livePreview } from '../editor/preview'
 import { ReadingPositions, selectionAt, trackReadingPosition } from '../editor/positions'
 import type { DocumentSnapshot } from '../../../shared/types'
+import { headingAnchors, type HeadingAnchor } from '../../../shared/anchors'
 import Icon from './Icon.vue'
 import 'katex/dist/katex.min.css'
 const props = defineProps<{
@@ -43,7 +44,9 @@ const error = ref('')
 const status = ref(props.document.recovered ? '已恢复草稿，请检查后保存' : '')
 const position = props.positions.get(props.document.path)
 const preview = ref(position?.preview ?? true)
-let rememberPosition: (() => void) | undefined
+let positionTracker: ReturnType<typeof trackReadingPosition> | undefined
+let indexedDocument: EditorState['doc'] | undefined
+let headings: HeadingAnchor[] = []
 const dirty = ref(props.document.dirty)
 const source = new Compartment()
 const access = new Compartment()
@@ -56,6 +59,29 @@ let uploading = 0
 let applying = false
 let revision = props.document.revision
 const text = () => view?.state.doc.toString() ?? props.document.text
+function jumpToAnchor(anchor: string) {
+  if (!view) return false
+  let from = 0
+  if (anchor) {
+    if (indexedDocument !== view.state.doc) {
+      indexedDocument = view.state.doc
+      headings = headingAnchors(text())
+    }
+    const heading = headings.find((h) => h.slug === anchor.normalize('NFC').toLowerCase())
+    if (!heading) return false
+    from = heading.from
+  }
+  positionTracker?.stopRestoring()
+  const container = host.value!.closest<HTMLElement>('.primary-document, .related-pane')!
+  const margin =
+    (container.querySelector<HTMLElement>(':scope > .related-toolbar')?.offsetHeight ?? 0) + 18
+  view.dispatch({
+    selection: { anchor: from },
+    effects: EditorView.scrollIntoView(from, { y: 'start', yMargin: margin }),
+  })
+  view.focus()
+  return true
+}
 function stage() {
   generation++
   dirty.value = true
@@ -317,7 +343,7 @@ onMounted(() => {
     }),
   })
   const container = host.value!.closest<HTMLElement>('.primary-document, .related-pane')!
-  rememberPosition = trackReadingPosition(
+  positionTracker = trackReadingPosition(
     view,
     container,
     props.positions,
@@ -346,7 +372,7 @@ watch(
 onBeforeUnmount(() => {
   destroyed = true
   clearTimeout(timer)
-  rememberPosition?.()
+  positionTracker?.remember()
   view?.destroy()
 })
 defineExpose({
@@ -360,7 +386,8 @@ defineExpose({
   },
   focus: () => view?.focus(),
   getText: text,
-  rememberPosition: () => rememberPosition?.(),
+  rememberPosition: () => positionTracker?.remember(),
+  jumpToAnchor,
 })
 </script>
 <template>

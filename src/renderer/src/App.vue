@@ -10,7 +10,9 @@ import type {
   AppEvent,
   PinKind,
   PinnedLocation,
+  NoteLocation,
 } from '../../shared/types'
+import { fragmentOf } from '../../shared/anchors'
 import EditorPane from './components/EditorPane.vue'
 import FileTree from './components/FileTree.vue'
 import Icon from './components/Icon.vue'
@@ -60,8 +62,9 @@ const createNameReady = computed(() => !!newName.value.trim().split(/[\\/]/).at(
 const chatText = ref('')
 const captures = ref<Capture[]>([])
 const linkInfo = ref<LinkInfo>({ outgoing: [], backlinks: [] })
-const history = ref<string[]>([])
+const history = ref<NoteLocation[]>([])
 const historyIndex = ref(-1)
+let pendingNavigation: NoteLocation | undefined
 const dirtyPaths = new Set<string>()
 let unsubscribe: () => void
 let systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
@@ -109,7 +112,7 @@ function notify(message: string, error = false) {
   notice.value = message
   noticeKind.value = error ? 'error' : 'info'
 }
-async function run(task: () => Promise<void>) {
+async function run(task: () => Promise<unknown>) {
   if (busy.value || moveDialog.value?.open || createDialog.value?.open) return
   busy.value = true
   try {
@@ -147,7 +150,11 @@ function applyMove(previous: string, doc: DocumentSnapshot) {
     document.title = basename(doc.path) + ' — SlipsMD'
   }
   if (rightDoc.value?.path === previous) rightDoc.value = doc
-  history.value = history.value.map((file) => (file === previous ? doc.path : file))
+  history.value = history.value.map((visit) =>
+    visit.path === previous ? { ...visit, path: doc.path } : visit,
+  )
+  if (pendingNavigation?.path === previous)
+    pendingNavigation = { ...pendingNavigation, path: doc.path }
 }
 async function moveDocument() {
   if (busy.value) return
@@ -194,15 +201,43 @@ async function flushAll() {
   const second = (await rightPane.value?.save()) ?? true
   return first && second
 }
-async function openDocument(file: string, newWindow = false) {
+async function openDocument(file: string, newWindow = false, anchor?: string) {
   await run(async () => {
     if (!(await flushAll())) return
     if (newWindow) {
-      await api.openWindow(file)
+      await api.openWindow(file, anchor)
       return
     }
     await openMainInternal(file)
+    if (anchor !== undefined) await jumpInPane(file, anchor)
   })
+}
+async function jumpInPane(file: string, anchor: string) {
+  await nextTick()
+  const pane =
+    mainDoc.value?.path === file
+      ? mainPane.value
+      : rightDoc.value?.path === file
+        ? rightPane.value
+        : undefined
+  if (!pane) throw new Error('目标笔记尚未打开，请重试。')
+  const found = pane.jumpToAnchor(anchor)
+  notify(
+    found
+      ? anchor
+        ? '已定位到 #' + anchor
+        : '已回到笔记开头。'
+      : '未找到标题锚点 #' + anchor + '，请检查标题或链接。',
+    !found,
+  )
+  return found
+}
+function recordVisit(path: string, anchor?: string) {
+  const current = history.value[historyIndex.value]
+  if (current?.path === path && current.anchor === anchor) return
+  history.value = history.value.slice(0, historyIndex.value + 1)
+  history.value.push({ path, anchor })
+  historyIndex.value = history.value.length - 1
 }
 async function openMainInternal(file: string) {
   creationFolder.value = null
@@ -220,20 +255,24 @@ async function openMainInternal(file: string) {
   fileTree.value?.reveal(doc.path)
   await updateLinks()
 }
-async function openRight(file: string, record = true) {
+async function openRight(file: string, record = true, anchor?: string) {
   if (mainDoc.value?.path === file) {
-    mainPane.value?.focus()
-    return
+    if (anchor !== undefined) await jumpInPane(file, anchor)
+    else mainPane.value?.focus()
+    return true
   }
-  if (!(await flushAll())) return
+  if (rightDoc.value?.path === file) {
+    const found = anchor === undefined || (await jumpInPane(file, anchor))
+    if (record && found) recordVisit(file, anchor)
+    return true
+  }
+  if (!(await flushAll())) return false
   const doc = await api.readDocument(file)
   if (rightDoc.value && rightDoc.value.path !== file) await api.releaseDocument(rightDoc.value.path)
   rightDoc.value = doc
-  if (record) {
-    history.value = history.value.slice(0, historyIndex.value + 1)
-    history.value.push(file)
-    historyIndex.value = history.value.length - 1
-  }
+  if (anchor !== undefined) await jumpInPane(file, anchor)
+  if (record) recordVisit(file, anchor)
+  return true
 }
 async function follow(source: string, href: string, newWindow = false) {
   await run(async () => {
@@ -241,22 +280,22 @@ async function follow(source: string, href: string, newWindow = false) {
       await api.external(href)
       return
     }
-    if (href.startsWith('#')) {
-      notify('请使用编辑器查找定位标题；首版暂不支持锚点跳转。')
-      return
-    }
-    const target = await api.resolveLink(source, href)
+    const anchor = fragmentOf(href)
+    const target = href.startsWith('#') ? source : await api.resolveLink(source, href)
     if (newWindow) {
-      if (await flushAll()) await api.openWindow(target)
-    } else await openRight(target)
+      if (await flushAll()) await api.openWindow(target, anchor)
+    } else if (target === mainDoc.value?.path) {
+      if (anchor !== undefined) await jumpInPane(target, anchor)
+      else mainPane.value?.focus()
+    } else await openRight(target, true, anchor)
   })
 }
 async function travel(delta: number) {
   await run(async () => {
     const i = historyIndex.value + delta
     if (i < 0 || i >= history.value.length) return
-    await openRight(history.value[i], false)
-    historyIndex.value = i
+    const visit = history.value[i]
+    if (await openRight(visit.path, false, visit.anchor)) historyIndex.value = i
   })
 }
 async function closeRightInternal() {
@@ -507,11 +546,34 @@ async function command(name: string) {
 function event(e: AppEvent) {
   if (e.type === 'relocated') applyMove(e.previous, e.document)
   if (e.type === 'settings') settings.value = e.settings
-  if (e.type === 'navigate') void openDocument(e.path)
+  if (e.type === 'navigate') {
+    pendingNavigation = { path: e.path, anchor: e.anchor }
+    void drainNavigation()
+  }
   if (e.type === 'command') void command(e.command)
   if (e.type === 'filesystem') void refresh()
   if (e.type === 'document' && !dirtyPaths.has(e.document.path)) saved(e.document)
 }
+async function drainNavigation() {
+  if (!pendingNavigation || busy.value || moveDialog.value?.open || createDialog.value?.open) return
+  const location = pendingNavigation
+  pendingNavigation = undefined
+  await run(async () => {
+    if (mainDoc.value?.path === location.path || rightDoc.value?.path === location.path) {
+      if (location.anchor !== undefined && rightDoc.value?.path === location.path)
+        await openRight(location.path, true, location.anchor)
+      else if (location.anchor !== undefined) await jumpInPane(location.path, location.anchor)
+      else (mainDoc.value?.path === location.path ? mainPane.value : rightPane.value)?.focus()
+    } else {
+      if (!(await flushAll())) return
+      await openMainInternal(location.path)
+      if (location.anchor !== undefined) await jumpInPane(location.path, location.anchor)
+    }
+  })
+}
+watch(busy, (value) => {
+  if (!value) void drainNavigation()
+})
 function shortcut(e: KeyboardEvent) {
   if (e.key === 'F2') {
     e.preventDefault()
@@ -537,7 +599,7 @@ onMounted(async () => {
     workspace.value = boot.workspace
     settings.value = boot.settings
     version.value = boot.version
-    if (boot.document) await openDocument(boot.document)
+    if (boot.document) await openDocument(boot.document, false, boot.anchor)
   } catch (e) {
     notify((e as Error).message, true)
   }
@@ -956,6 +1018,7 @@ onBeforeUnmount(() => {
       class="move-note-dialog"
       aria-labelledby="move-title"
       @cancel="relocating && $event.preventDefault()"
+      @close="drainNavigation"
     >
       <form @submit.prevent="moveDocument">
         <h2 id="move-title">重命名或移动笔记</h2>
@@ -994,6 +1057,7 @@ onBeforeUnmount(() => {
       class="move-note-dialog"
       aria-labelledby="create-title"
       @cancel="creating && $event.preventDefault()"
+      @close="drainNavigation"
     >
       <form @submit.prevent="createEntry">
         <h2 id="create-title">{{ createKind === 'file' ? '新建笔记' : '新建文件夹' }}</h2>

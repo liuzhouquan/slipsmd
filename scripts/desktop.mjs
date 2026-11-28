@@ -6,6 +6,7 @@ for (const script of [
   'scripts/positions-smoke.mjs',
   'scripts/relocation-smoke.mjs',
   'scripts/creation-smoke.mjs',
+  'scripts/anchors-smoke.mjs',
 ]) {
   const result = spawnSync(process.execPath, [script, ...process.argv.slice(2)], {
     stdio: 'inherit',

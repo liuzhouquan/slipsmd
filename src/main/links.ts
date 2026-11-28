@@ -26,7 +26,7 @@ export function extractLinks(source: string, text: string, root: string): LinkEn
       if (token.type !== 'link_open') continue
       const href = token.attrGet('href') ?? ''
       const target = resolveNote(source, href, root)
-      if (!target) continue
+      if (!target || path.relative(source, target) === '') continue
       let label = ''
       for (let j = i + 1; j < block.children.length && block.children[j].type !== 'link_close'; j++)
         label += block.children[j].content

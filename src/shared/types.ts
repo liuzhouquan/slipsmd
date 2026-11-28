@@ -62,9 +62,14 @@ export interface Bootstrap {
   document: string | null
   settings: Settings
   version: string
+  anchor?: string
+}
+export interface NoteLocation {
+  path: string
+  anchor?: string
 }
 export type AppEvent =
-  | { type: 'navigate'; path: string }
+  | { type: 'navigate'; path: string; anchor?: string }
   | { type: 'filesystem' }
   | { type: 'document'; document: DocumentSnapshot }
   | { type: 'settings'; settings: Settings }
@@ -85,7 +90,7 @@ export interface DesktopAPI {
   releaseDocument(path: string): Promise<void>
   reloadDocument(path: string): Promise<DocumentSnapshot>
   saveCopy(path: string): Promise<string | null>
-  openWindow(path?: string): Promise<void>
+  openWindow(path?: string, anchor?: string): Promise<void>
   pinLocation(kind: PinKind, path?: string): Promise<Settings>
   removePin(id: string): Promise<Settings>
   openPin(id: string, newWindow?: boolean): Promise<PinNavigation | null>

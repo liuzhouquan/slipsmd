@@ -17,6 +17,16 @@ describe('Markdown note links', () => {
     const links = extractLinks(note, '[Reference][ref]\n\n[ref]: ../B.md', root)
     expect(links[0].target).toBe(path.join(root, 'B.md'))
   })
+  it('retains cross-note fragments without treating local contents links as backlinks', () => {
+    const links = extractLinks(
+      note,
+      '[local](#section)\n\n[self](A.md#section)\n\n[B](B.md#标题)',
+      root,
+    )
+    expect(links).toHaveLength(1)
+    expect(links[0].target).toBe(path.join(root, 'notes', 'B.md'))
+    expect(links[0].label).toBe('B')
+  })
   it('rejects protocols and does not treat sibling names as authorized children', () => {
     expect(resolveNote(note, 'javascript:alert(1)', root)).toBe(null)
     expect(resolveNote(note, '%broken.md', root)).toBe(null)
